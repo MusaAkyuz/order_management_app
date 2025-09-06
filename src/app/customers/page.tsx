@@ -2,14 +2,13 @@ import Layout from "../../components/Layout";
 
 export default function Customers() {
   return (
-    <Layout currentPage="products">
-      <div className="flex flex-col items-center justify-center px-4 py-12">
-        <h1 className="text-4xl font-extrabold text-gray-800 mb-4 text-center">
-          Müşteri Yönetimi
-        </h1>
-        <p className="text-lg text-gray-600 mb-10 text-center max-w-2xl">
-          Bu sayfa henüz geliştirilme aşamasındadır.
-        </p>
+    <Layout currentPage="customers">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="text-center py-12">
+          <p className="text-gray-500">
+            Müşteri yönetimi sayfası yakında gelecek...
+          </p>
+        </div>
       </div>
     </Layout>
   );
