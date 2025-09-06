@@ -1,11 +1,11 @@
 import Layout from "../../components/Layout";
 
-export default function CreateOrder() {
+export default function Customers() {
   return (
-    <Layout currentPage="create-order">
+    <Layout currentPage="products">
       <div className="flex flex-col items-center justify-center px-4 py-12">
         <h1 className="text-4xl font-extrabold text-gray-800 mb-4 text-center">
-          Sipariş Oluştur
+          Müşteri Yönetimi
         </h1>
         <p className="text-lg text-gray-600 mb-10 text-center max-w-2xl">
           Bu sayfa henüz geliştirilme aşamasındadır.

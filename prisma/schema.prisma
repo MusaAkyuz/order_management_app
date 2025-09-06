@@ -1,0 +1,124 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id            Int      @id @default(autoincrement())
+  name          String   // Müşteri/Firma adı
+  email         String?  @unique
+  phone         String?
+  address       String?
+  taxNumber     String?  // Vergi numarası (firmalar için)
+  isCompany     Boolean  @default(false) // true: Firma, false: Bireysel
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  orders        Order[]
+  transactions  Transaction[]
+  
+  @@map("customers")
+}
+
+model ProductType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  
+  products    Product[]
+  
+  @@map("product_types")
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  currentPrice       Float
+  stock       Int
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  typeId      Int
+  type        ProductType @relation(fields: [typeId], references: [id])
+  
+  orderItems  OrderItem[]
+  transactions Transaction[]
+  
+  @@map("products")
+}
+
+model OrderStatus {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  color       String   // Renk kodu (örn: #FFD700, #28A745, #DC3545)
+  
+  orders      Order[]
+  
+  @@map("order_statuses")
+}
+
+model Order {
+  id            Int      @id @default(autoincrement())
+  totalPrice    Float
+  laborCost     Float    @default(0) // İşçilik masrafı
+  deliveryFee   Float    @default(0) // Teslimat ücreti
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  customerId    Int
+  customer      Customer @relation(fields: [customerId], references: [id])
+  
+  statusId      Int
+  status        OrderStatus @relation(fields: [statusId], references: [id])
+  
+  orderItems    OrderItem[]
+  transactions  Transaction[]
+  
+  @@map("orders")
+}
+
+model Transaction {
+  id            Int      @id @default(autoincrement())
+  action        String   // İşlem türü: "ORDER_CREATED", "ORDER_DELIVERED", "ORDER_CANCELLED", "PRODUCT_ADDED", etc.
+  description   String   // İşlem açıklaması
+  details       String?  // Ek detaylar (JSON format olabilir)
+  createdAt     DateTime @default(now())
+  
+  customerId    Int?     // İşlem bir müşteriyle ilgiliyse
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  
+  orderId       Int?     // İşlem bir siparişle ilgiliyse
+  order         Order?   @relation(fields: [orderId], references: [id])
+  
+  productId     Int?     // İşlem bir ürünle ilgiliyse
+  product       Product? @relation(fields: [productId], references: [id])
+  
+  @@map("transactions")
+}
+
+model OrderItem {
+  id        Int @id @default(autoincrement())
+  quantity  Int
+  price     Float
+  isActive  Boolean @default(true)
+  
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+  
+  @@map("order_items")
+}
