@@ -20,6 +20,11 @@ Use react-hook-form for form handling and validation.
 Use zod for schema validation.
 Use navigation bar for navigating between pages.
 
+# Style Rules
+
+Input ve Select komponentleri small olsun ve placeholder ve value değerleri koyu gri olsun
+Çok açık gri yapma
+
 # Database Schema
 
 ## Customer Table
@@ -46,7 +51,7 @@ Use navigation bar for navigating between pages.
 
 ## Order Table
 
-- id, totalPrice, laborCost, deliveryFee
+- id, totalPrice, laborCost, deliveryFee, address, description
 - customerId (foreign key), statusId (foreign key)
 - isActive, createdAt, updatedAt
 

@@ -73,6 +73,8 @@ model Order {
   totalPrice    Float
   laborCost     Float    @default(0) // İşçilik masrafı
   deliveryFee   Float    @default(0) // Teslimat ücreti
+  address       String?  // Sipariş adresi (müşteriden otomatik yüklenebilir veya özel girilir)
+  description   String?  // Sipariş açıklaması/notları
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

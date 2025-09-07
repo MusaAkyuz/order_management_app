@@ -7,6 +7,8 @@ import type { Prisma } from "@prisma/client";
 const createOrderSchema = z.object({
   customerId: z.number(),
   statusId: z.number().default(1), // Varsayılan: "Beklemede"
+  address: z.string().optional(),
+  description: z.string().optional(),
   laborCost: z.number().default(0),
   deliveryFee: z.number().default(0),
   orderItems: z
@@ -42,6 +44,8 @@ export async function POST(request: NextRequest) {
           data: {
             customerId: validatedData.customerId,
             statusId: validatedData.statusId,
+            address: validatedData.address || null,
+            description: validatedData.description || null,
             totalPrice,
             laborCost: validatedData.laborCost,
             deliveryFee: validatedData.deliveryFee,

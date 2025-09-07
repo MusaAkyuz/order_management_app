@@ -10,6 +10,8 @@ import SearchableSelect from "../../components/SearchableSelect";
 // Zod şeması
 const orderSchema = z.object({
   customerId: z.number().min(1, "Müşteri seçimi zorunludur"),
+  address: z.string().optional(),
+  description: z.string().optional(),
   laborCost: z.number().min(0, "İşçilik maliyeti negatif olamaz"),
   deliveryFee: z.number().min(0, "Teslimat ücreti negatif olamaz"),
   discountType: z.enum(["percentage", "amount"]),
@@ -31,6 +33,7 @@ interface Customer {
   id: number;
   name: string;
   email: string;
+  address: string | null;
   isCompany: boolean;
 }
 
@@ -61,6 +64,8 @@ export default function CreateOrder() {
     resolver: zodResolver(orderSchema),
     defaultValues: {
       customerId: 0,
+      address: "",
+      description: "",
       laborCost: 0,
       deliveryFee: 0,
       discountType: "percentage" as const,
@@ -154,6 +159,16 @@ export default function CreateOrder() {
     }
   };
 
+  // Müşteri seçildiğinde adres bilgisini yükle
+  const handleCustomerChange = (customerId: number) => {
+    setValue("customerId", customerId);
+
+    const selectedCustomer = customers.find((c) => c.id === customerId);
+    if (selectedCustomer && selectedCustomer.address) {
+      setValue("address", selectedCustomer.address);
+    }
+  };
+
   // Form gönderimi
   const onSubmit = async (data: OrderFormData) => {
     setSubmitLoading(true);
@@ -215,10 +230,46 @@ export default function CreateOrder() {
                   }`,
                 }))}
                 value={watch("customerId") || ""}
-                onChange={(value) => setValue("customerId", Number(value))}
+                onChange={(value) => handleCustomerChange(Number(value))}
                 placeholder="Müşteri seçin veya arayın"
                 error={errors.customerId?.message}
               />
+
+              {/* Adres */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Teslimat Adresi
+                </label>
+                <input
+                  type="text"
+                  {...register("address")}
+                  className="w-full px-3 py-2 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
+                  placeholder="Teslimat adresi (müşteri seçildiğinde otomatik yüklenebilir)"
+                />
+                {errors.address && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.address.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Açıklama */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Sipariş Açıklaması
+                </label>
+                <textarea
+                  {...register("description")}
+                  className="w-full px-3 py-2 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
+                  placeholder="Sipariş ile ilgili ek bilgiler, notlar..."
+                  rows={3}
+                />
+                {errors.description && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.description.message}
+                  </p>
+                )}
+              </div>
 
               {/* Ürünler */}
               <div>
