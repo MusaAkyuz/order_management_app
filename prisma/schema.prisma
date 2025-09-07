@@ -124,3 +124,18 @@ model OrderItem {
   
   @@map("order_items")
 }
+
+model LookupTable {
+  id          Int      @id @default(autoincrement())
+  category    String   // Kategori: "TAX_RATES", "PROFIT_MARGINS", "COMPANY_INFO", "SYSTEM_SETTINGS"
+  key         String   // Anahtar: "VAT_18", "VAT_8", "DEFAULT_MARGIN", "COMPANY_NAME"
+  value       String   // Değer: "18", "8", "15", "Şirket Adı"
+  description String?  // Açıklama: "KDV %18 oranı", "Varsayılan kazanç marjı"
+  dataType    String   @default("STRING") // Veri tipi: "STRING", "NUMBER", "BOOLEAN", "JSON"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([category, key])
+  @@map("lookup_table")
+}

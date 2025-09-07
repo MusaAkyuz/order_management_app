@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
         address: validatedData.address || null,
         taxNumber: validatedData.taxNumber || null,
         isCompany: validatedData.isCompany,
+        isActive: true,
       },
     });
 
