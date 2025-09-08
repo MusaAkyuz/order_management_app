@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Customer, Product, PDFOrderItem } from "../../types/api";
+import { formatNumber } from "../../utils/currency";
 
 // pdfMake dinamik import
 let pdfMake: any = null;
@@ -41,6 +42,7 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
   const [pdfUrl, setPdfUrl] = useState<string>("");
   const [companyInfo, setCompanyInfo] = useState<any>(null);
   const [currencySymbol, setCurrencySymbol] = useState("₺");
+  const [taxRate, setTaxRate] = useState(18); // Varsayılan KDV oranı %18
 
   // Şirket bilgilerini ve sistem ayarlarını yükle
   useEffect(() => {
@@ -52,26 +54,66 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
         );
         const companyResult = await companyResponse.json();
 
+        console.log("companyResult", companyResult);
+
         // Para birimi sembolünü API'dan getir
         const currencyResponse = await fetch(
           "/api/lookup?category=SYSTEM_SETTINGS&key=CURRENCY_SYMBOL"
         );
         const currencyResult = await currencyResponse.json();
 
+        // KDV oranını API'dan getir
+        const taxResponse = await fetch(
+          "/api/lookup?category=TAX_RATES&key=VAT_18"
+        );
+        const taxResult = await taxResponse.json();
+
+        console.log("currencyResult", currencyResult);
+
         if (companyResult.success && companyResult.data.length > 0) {
           // Şirket bilgilerini organize et
           const companyData = companyResult.data.reduce(
             (acc: any, item: any) => {
-              acc[item.key] = item.processedValue;
+              // key'i daha uygun forma çevir
+              let key = item.key;
+              if (key === "COMPANY_NAME") key = "name";
+              else if (key === "COMPANY_ADDRESS") key = "address";
+              else if (key === "COMPANY_PHONE") key = "phone";
+              else if (key === "COMPANY_EMAIL") key = "email";
+              else if (key === "COMPANY_TAX_NUMBER") key = "tax_number";
+
+              acc[key] = item.value; // processedValue yerine value kullan
               return acc;
             },
             {}
           );
+          console.log("Company data organized:", companyData);
           setCompanyInfo(companyData);
+        } else {
+          console.log("Company data not found, using fallback");
+          setCompanyInfo({
+            name: "",
+            address: "",
+            phone: "",
+            email: "",
+            tax_number: "",
+          });
         }
 
         if (currencyResult.success && currencyResult.data.length > 0) {
-          setCurrencySymbol(currencyResult.data[0].processedValue);
+          console.log("Currency result:", currencyResult.data[0]);
+          setCurrencySymbol(currencyResult.data[0].value); // processedValue yerine value kullan
+        } else {
+          console.log("Currency data not found, using fallback");
+          setCurrencySymbol("₺");
+        }
+
+        if (taxResult.success && taxResult.data.length > 0) {
+          console.log("Tax result:", taxResult.data[0]);
+          setTaxRate(parseFloat(taxResult.data[0].value) || 18);
+        } else {
+          console.log("Tax data not found, using fallback");
+          setTaxRate(18);
         }
       } catch (error) {
         console.error("Lookup data yüklenirken hata:", error);
@@ -84,6 +126,7 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
           tax_number: "1234567890",
         });
         setCurrencySymbol("₺");
+        setTaxRate(18);
       }
     };
 
@@ -91,11 +134,21 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
   }, []);
 
   // Toplam hesaplamaları
-  const calculateSubtotal = () => {
-    const itemsTotal = data.orderItems.reduce((sum, item) => {
+  const calculateItemsTotal = () => {
+    return data.orderItems.reduce((sum, item) => {
       return sum + item.quantity * item.price;
     }, 0);
-    return itemsTotal + data.laborCost + data.deliveryFee;
+  };
+
+  const calculateTaxAmount = () => {
+    const itemsTotal = calculateItemsTotal();
+    return (itemsTotal * taxRate) / 100;
+  };
+
+  const calculateSubtotal = () => {
+    const itemsTotal = calculateItemsTotal();
+    const taxAmount = calculateTaxAmount();
+    return itemsTotal + taxAmount + data.laborCost + data.deliveryFee;
   };
 
   const calculateDiscount = () => {
@@ -347,10 +400,13 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
             alignment: "center",
           },
           {
-            text: `${currencySymbol}${item.price.toFixed(2)}`,
+            text: `${currencySymbol}${formatNumber(item.price)}`,
             alignment: "right",
           },
-          { text: `${currencySymbol}${total.toFixed(2)}`, alignment: "right" },
+          {
+            text: `${currencySymbol}${formatNumber(total)}`,
+            alignment: "right",
+          },
         ]);
       });
 
@@ -366,50 +422,72 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
 
     // Maliyet Detayları
     const costDetails: any[][] = [];
-    const itemsTotal = data.orderItems.reduce(
-      (sum, item) => sum + item.quantity * item.price,
-      0
-    );
+    const itemsTotal = calculateItemsTotal();
+    const taxAmount = calculateTaxAmount();
 
+    // Ürünler toplamı (KDV hariç)
     if (itemsTotal > 0) {
       costDetails.push([
-        { text: "Ürünler Toplamı", alignment: "right" },
+        { text: "Ürünler Toplamı (KDV Hariç)", alignment: "right" },
         {
-          text: `${currencySymbol}${itemsTotal.toFixed(2)}`,
+          text: `${currencySymbol}${formatNumber(itemsTotal)}`,
+          alignment: "right",
+        },
+      ]);
+
+      // KDV tutarı
+      costDetails.push([
+        { text: `KDV (%${taxRate})`, alignment: "right", bold: true },
+        {
+          text: `${currencySymbol}${formatNumber(taxAmount)}`,
+          alignment: "right",
+          bold: true,
+        },
+      ]);
+
+      // Ürünler toplamı (KDV dahil)
+      costDetails.push([
+        { text: "Ürünler Toplamı (KDV Dahil)", alignment: "right" },
+        {
+          text: `${currencySymbol}${formatNumber(itemsTotal + taxAmount)}`,
           alignment: "right",
         },
       ]);
     }
 
+    // İşçilik ücreti
     if (data.laborCost > 0) {
       costDetails.push([
-        { text: "İşçilik", alignment: "right" },
+        { text: "İşçilik Ücreti", alignment: "right" },
         {
-          text: `${currencySymbol}${data.laborCost.toFixed(2)}`,
+          text: `${currencySymbol}${formatNumber(data.laborCost)}`,
           alignment: "right",
         },
       ]);
     }
 
+    // Lojistik ücreti
     if (data.deliveryFee > 0) {
       costDetails.push([
-        { text: "Teslimat", alignment: "right" },
+        { text: "Lojistik Ücreti", alignment: "right" },
         {
-          text: `${currencySymbol}${data.deliveryFee.toFixed(2)}`,
+          text: `${currencySymbol}${formatNumber(data.deliveryFee)}`,
           alignment: "right",
         },
       ]);
     }
 
+    // Ara toplam (indirim öncesi)
     costDetails.push([
       { text: "Ara Toplam", alignment: "right", bold: true },
       {
-        text: `${currencySymbol}${subtotal.toFixed(2)}`,
+        text: `${currencySymbol}${formatNumber(subtotal)}`,
         alignment: "right",
         bold: true,
       },
     ]);
 
+    // İndirim varsa
     if (discountAmount > 0) {
       const discountText =
         data.discountType === "percentage"
@@ -419,7 +497,7 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
       costDetails.push([
         { text: discountText, alignment: "right", color: "#d32f2f" },
         {
-          text: `-${currencySymbol}${discountAmount.toFixed(2)}`,
+          text: `-${currencySymbol}${formatNumber(discountAmount)}`,
           alignment: "right",
           color: "#d32f2f",
         },
@@ -435,7 +513,7 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
         fillColor: "#f5f5f5",
       },
       {
-        text: `${currencySymbol}${total.toFixed(2)}`,
+        text: `${currencySymbol}${formatNumber(total)}`,
         alignment: "right",
         bold: true,
         fontSize: 12,
@@ -504,7 +582,7 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
     };
 
     generatePDF();
-  }, [data, products, companyInfo, currencySymbol]); // Component unmount olduğunda URL'i temizle
+  }, [data, products, companyInfo, currencySymbol, taxRate]); // Component unmount olduğunda URL'i temizle
   useEffect(() => {
     return () => {
       if (pdfUrl) {

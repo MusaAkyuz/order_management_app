@@ -78,6 +78,7 @@ export default function CreateOrder() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [taxRate, setTaxRate] = useState(18); // KDV oranı
   const [showPDFPreview, setShowPDFPreview] = useState(false);
 
   const {
@@ -156,16 +157,19 @@ export default function CreateOrder() {
     async function fetchData() {
       setLoading(true);
       try {
-        const [customersRes, productsRes] = await Promise.all([
+        const [customersRes, productsRes, taxRes] = await Promise.all([
           fetch("/api/customers"),
           fetch("/api/products"),
+          fetch("/api/lookup?category=TAX_RATES&key=VAT_18"),
         ]);
 
         const customersData = await customersRes.json();
         const productsData = await productsRes.json();
+        const taxData = await taxRes.json();
 
         console.log("API Response - customersData:", customersData);
         console.log("API Response - productsData:", productsData);
+        console.log("API Response - taxData:", taxData);
 
         if (customersData.success) {
           setCustomers(customersData.data.filter((c: Customer) => true));
@@ -182,6 +186,13 @@ export default function CreateOrder() {
           setProducts(productsData.data.filter((p: Product) => p.isActive));
         } else {
           toast.error("Ürünler yüklenirken hata oluştu");
+        }
+
+        if (taxData.success && taxData.data.length > 0) {
+          setTaxRate(parseFloat(taxData.data[0].value) || 18);
+        } else {
+          console.log("Tax data not found, using default 18%");
+          setTaxRate(18);
         }
       } catch (error) {
         console.error("Veri yüklenirken hata:", error);
@@ -210,14 +221,26 @@ export default function CreateOrder() {
     }
   };
 
-  // Ara toplam hesaplama (Ürünler + İşçilik + Teslimat)
-  const calculateSubtotal = () => {
-    const itemsTotal = watchedItems.reduce((sum, item) => {
+  // Ürünler toplamını hesapla (KDV hariç)
+  const calculateItemsTotal = () => {
+    return watchedItems.reduce((sum, item) => {
       return sum + item.quantity * item.price;
     }, 0);
+  };
+
+  // KDV tutarını hesapla
+  const calculateTaxAmount = () => {
+    const itemsTotal = calculateItemsTotal();
+    return (itemsTotal * taxRate) / 100;
+  };
+
+  // Ara toplam hesaplama (Ürünler + KDV + İşçilik + Teslimat)
+  const calculateSubtotal = () => {
+    const itemsTotal = calculateItemsTotal();
+    const taxAmount = calculateTaxAmount();
     const laborCost = watch("laborCost") || 0;
     const deliveryFee = watch("deliveryFee") || 0;
-    return itemsTotal + laborCost + deliveryFee;
+    return itemsTotal + taxAmount + laborCost + deliveryFee;
   };
 
   // İndirim tutarını hesapla
@@ -325,9 +348,14 @@ export default function CreateOrder() {
               />
 
               <OrderSummary
+                calculateItemsTotal={calculateItemsTotal}
+                calculateTaxAmount={calculateTaxAmount}
                 calculateSubtotal={calculateSubtotal}
                 calculateDiscount={calculateDiscount}
                 calculateTotal={calculateTotal}
+                taxRate={taxRate}
+                laborCost={watch("laborCost") || 0}
+                deliveryFee={watch("deliveryFee") || 0}
                 discountType={watch("discountType")}
                 discountValue={watch("discountValue")}
                 submitLoading={submitLoading}
