@@ -46,6 +46,9 @@ export interface Order {
   totalPrice: number;
   laborCost: number;
   deliveryFee: number;
+  taxRate: number;
+  discountType: string;
+  discountValue: number;
   address: string | null;
   description: string | null;
   customerId: number;

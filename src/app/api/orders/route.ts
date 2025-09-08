@@ -11,6 +11,9 @@ const createOrderSchema = z.object({
   description: z.string().optional(),
   laborCost: z.number().default(0),
   deliveryFee: z.number().default(0),
+  taxRate: z.number().default(18),
+  discountType: z.enum(["percentage", "amount"]).default("percentage"),
+  discountValue: z.number().default(0),
   orderItems: z
     .array(
       z
@@ -65,6 +68,9 @@ export async function POST(request: NextRequest) {
             totalPrice,
             laborCost: validatedData.laborCost,
             deliveryFee: validatedData.deliveryFee,
+            taxRate: validatedData.taxRate,
+            discountType: validatedData.discountType,
+            discountValue: validatedData.discountValue,
           },
           include: {
             customer: true,

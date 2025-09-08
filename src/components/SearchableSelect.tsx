@@ -140,6 +140,7 @@ export default function SearchableSelect({
           onKeyDown={handleInputKeyDown}
           placeholder={placeholder}
           disabled={disabled}
+          autoComplete="off"
           className={`w-full px-2 py-1 text-sm text-gray-800 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 transition placeholder:text-gray-600 ${
             error ? "border-red-300 focus:ring-red-500" : "border-gray-300"
           } ${disabled ? "bg-gray-100 cursor-not-allowed" : "bg-white"} ${

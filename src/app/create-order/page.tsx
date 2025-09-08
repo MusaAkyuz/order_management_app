@@ -23,6 +23,10 @@ const orderSchema = z.object({
   description: z.string(),
   laborCost: z.number().min(0, "İşçilik maliyeti negatif olamaz"),
   deliveryFee: z.number().min(0, "Teslimat ücreti negatif olamaz"),
+  taxRate: z
+    .number()
+    .min(0, "KDV oranı negatif olamaz")
+    .max(100, "KDV oranı 100'den fazla olamaz"),
   discountType: z.enum(["percentage", "amount"]),
   discountValue: z.number().min(0, "İndirim değeri negatif olamaz"),
   orderItems: z
@@ -96,6 +100,7 @@ export default function CreateOrder() {
       description: "",
       laborCost: 0,
       deliveryFee: 0,
+      taxRate: 18,
       discountType: "percentage" as const,
       discountValue: 0,
       orderItems: [
@@ -318,7 +323,11 @@ export default function CreateOrder() {
           <div className="bg-white shadow-lg rounded-lg p-6">
             <OrderFormHeader title="Sipariş Bilgileri" />
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <form
+              onSubmit={handleSubmit(onSubmit)}
+              className="space-y-4"
+              autoComplete="off"
+            >
               <CustomerInfo
                 customers={customers}
                 register={register}

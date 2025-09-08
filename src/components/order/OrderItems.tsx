@@ -28,6 +28,7 @@ interface OrderFormData {
   description: string;
   laborCost: number;
   deliveryFee: number;
+  taxRate: number;
   discountType: "percentage" | "amount";
   discountValue: number;
   orderItems: Array<{
@@ -141,6 +142,7 @@ export default function OrderItems({
               type="checkbox"
               {...register(`orderItems.${index}.isManual`)}
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+              autoComplete="off"
               onChange={(e) => {
                 setValue(`orderItems.${index}.isManual`, e.target.checked);
                 if (e.target.checked) {
@@ -165,12 +167,14 @@ export default function OrderItems({
                   {...register(`orderItems.${index}.manualName`)}
                   className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
                   placeholder="Ürün adını yazın"
+                  autoComplete="off"
                 />
                 {/* Manuel mod için gizli productId */}
                 <input
                   type="hidden"
                   {...register(`orderItems.${index}.productId`)}
                   value={0}
+                  autoComplete="off"
                 />
               </>
             ) : (
@@ -204,6 +208,7 @@ export default function OrderItems({
                   type="hidden"
                   {...register(`orderItems.${index}.manualName`)}
                   value=""
+                  autoComplete="off"
                 />
               </>
             )}
@@ -251,6 +256,7 @@ export default function OrderItems({
               placeholder={`Miktar${
                 watchedItems[index]?.isManual ? "" : ` (${getUnitLabel(index)})`
               }`}
+              autoComplete="off"
             />
             {errors.orderItems?.[index]?.quantity && (
               <p className="text-red-500 text-xs mt-1">
@@ -271,6 +277,7 @@ export default function OrderItems({
                 })}
                 className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
                 placeholder="Birim fiyat"
+                autoComplete="off"
               />
             ) : (
               <>
@@ -283,6 +290,7 @@ export default function OrderItems({
                   {...register(`orderItems.${index}.price`, {
                     valueAsNumber: true,
                   })}
+                  autoComplete="off"
                 />
               </>
             )}

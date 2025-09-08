@@ -15,6 +15,7 @@ interface OrderFormData {
   description: string;
   laborCost: number;
   deliveryFee: number;
+  taxRate: number;
   discountType: "percentage" | "amount";
   discountValue: number;
   orderItems: Array<{
@@ -136,6 +137,7 @@ export default function CustomerInfo({
             {...register("address")}
             className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
             placeholder="Teslimat adresi (müşteri seçildiğinde otomatik yüklenebilir)"
+            autoComplete="off"
           />
           {errors.address && (
             <p className="text-red-500 text-xs mt-1">
@@ -154,6 +156,7 @@ export default function CustomerInfo({
             className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
             placeholder="Sipariş ile ilgili ek bilgiler, notlar..."
             rows={2}
+            autoComplete="off"
           />
           {errors.description && (
             <p className="text-red-500 text-xs mt-1">

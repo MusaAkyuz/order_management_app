@@ -11,6 +11,7 @@ interface OrderFormData {
   description: string;
   laborCost: number;
   deliveryFee: number;
+  taxRate: number;
   discountType: "percentage" | "amount";
   discountValue: number;
   orderItems: Array<{
@@ -48,6 +49,7 @@ export default function AdditionalCosts({
           {...register("laborCost", { valueAsNumber: true })}
           className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
           placeholder="İşçilik maliyeti girin"
+          autoComplete="off"
         />
         {errors.laborCost && (
           <p className="text-red-500 text-xs mt-1">
@@ -67,6 +69,7 @@ export default function AdditionalCosts({
           {...register("deliveryFee", { valueAsNumber: true })}
           className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
           placeholder="Teslimat ücreti girin"
+          autoComplete="off"
         />
         {errors.deliveryFee && (
           <p className="text-red-500 text-xs mt-1">
@@ -91,6 +94,7 @@ export default function AdditionalCosts({
                 ? "Yüzde girin"
                 : "Tutar girin"
             }
+            autoComplete="off"
           />
           {/* Toggle Butonu */}
           <div className="flex bg-gray-100 rounded p-1">
