@@ -4,6 +4,7 @@ import Layout from "../../components/Layout";
 import ProductPageHeader from "../../components/product/ProductPageHeader";
 import ProductTable from "../../components/product/ProductTable";
 import ProductFormModal from "../../components/product/ProductFormModal";
+import StockEditModal from "../../components/product/StockEditModal";
 import LoadingSpinner from "../../components/product/LoadingSpinner";
 import toast from "react-hot-toast";
 
@@ -12,6 +13,7 @@ interface Product {
   name: string;
   currentPrice: number;
   stock: number;
+  minStockLevel?: number;
   description?: string;
   isActive: boolean;
   createdAt: Date;
@@ -33,6 +35,7 @@ interface ProductFormData {
   name: string;
   currentPrice: number;
   stock: number;
+  minStockLevel?: number;
   description?: string;
   typeId: number;
   isActive?: boolean;
@@ -43,8 +46,23 @@ export default function Products() {
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingStockProduct, setEditingStockProduct] =
+    useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Stok uyarıları için helper fonksiyon
+  const getLowStockProducts = () => {
+    return products.filter(
+      (product) =>
+        product.minStockLevel &&
+        product.stock <= product.minStockLevel &&
+        product.isActive
+    );
+  };
+
+  const lowStockCount = getLowStockProducts().length;
 
   // Ürünleri yükle
   const fetchProducts = async () => {
@@ -103,6 +121,12 @@ export default function Products() {
     setIsModalOpen(true);
   };
 
+  // Stok düzenleme
+  const handleEditStock = (product: Product) => {
+    setEditingStockProduct(product);
+    setIsStockModalOpen(true);
+  };
+
   // Ürün kaydetme (yeni ekle veya güncelle)
   const handleSaveProduct = async (formData: ProductFormData) => {
     try {
@@ -132,6 +156,33 @@ export default function Products() {
     } catch (error) {
       console.error("Save product error:", error);
       toast.error("Bir hata oluştu");
+    }
+  };
+
+  // Stok güncelleme
+  const handleSaveStock = async (productId: number, newStock: number) => {
+    try {
+      const response = await fetch(`/api/products/${productId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          stock: newStock,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        await fetchProducts(); // Listeyi yenile
+        setIsStockModalOpen(false);
+        setEditingStockProduct(null);
+      } else {
+        throw new Error(data.error || "Stok güncellenirken hata oluştu");
+      }
+    } catch (error) {
+      throw error; // StockEditModal'da yakalanacak
     }
   };
 
@@ -213,12 +264,14 @@ export default function Products() {
           onSearchChange={setSearchTerm}
           totalProducts={products.length}
           activeProducts={activeProducts}
+          lowStockCount={lowStockCount}
         />
 
         <ProductTable
           products={products}
           isLoading={false}
           onEdit={handleEditProduct}
+          onEditStock={handleEditStock}
           onDelete={handleDeleteProduct}
           onBulkDelete={handleBulkDeleteProducts}
           searchTerm={searchTerm}
@@ -233,6 +286,16 @@ export default function Products() {
           onSave={handleSaveProduct}
           product={editingProduct}
           productTypes={productTypes}
+        />
+
+        <StockEditModal
+          isOpen={isStockModalOpen}
+          onClose={() => {
+            setIsStockModalOpen(false);
+            setEditingStockProduct(null);
+          }}
+          onSave={handleSaveStock}
+          product={editingStockProduct}
         />
       </div>
     </Layout>

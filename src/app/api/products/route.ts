@@ -8,6 +8,7 @@ const productSchema = z.object({
   name: z.string().min(1, "Ürün adı zorunludur"),
   currentPrice: z.number().min(0, "Fiyat negatif olamaz"),
   stock: z.number().min(0, "Stok negatif olamaz"),
+  minStockLevel: z.number().min(0, "Minimum stok negatif olamaz").optional(),
   description: z.string().optional(),
   typeId: z.number().min(1, "Ürün tipi seçimi zorunludur"),
 });
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
         name: validatedData.name,
         currentPrice: validatedData.currentPrice,
         stock: validatedData.stock,
+        minStockLevel: validatedData.minStockLevel,
         description: validatedData.description,
         typeId: validatedData.typeId,
         isActive: true,

@@ -4,6 +4,7 @@ interface ProductPageHeaderProps {
   onSearchChange: (value: string) => void;
   totalProducts: number;
   activeProducts: number;
+  lowStockCount?: number;
 }
 
 export default function ProductPageHeader({
@@ -12,6 +13,7 @@ export default function ProductPageHeader({
   onSearchChange,
   totalProducts,
   activeProducts,
+  lowStockCount = 0,
 }: ProductPageHeaderProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -30,6 +32,12 @@ export default function ProductPageHeader({
               <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
               {totalProducts - activeProducts} Pasif Ürün
             </span>
+            {lowStockCount > 0 && (
+              <span className="flex items-center gap-1 text-red-600 font-medium">
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                ⚠️ {lowStockCount} Düşük Stok
+              </span>
+            )}
             <span className="font-medium">Toplam: {totalProducts}</span>
           </div>
         </div>

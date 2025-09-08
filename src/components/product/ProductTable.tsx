@@ -6,6 +6,7 @@ interface Product {
   name: string;
   currentPrice: number;
   stock: number;
+  minStockLevel?: number;
   description?: string;
   isActive: boolean;
   createdAt: Date;
@@ -21,6 +22,7 @@ interface ProductTableProps {
   products: Product[];
   isLoading: boolean;
   onEdit: (product: Product) => void;
+  onEditStock: (product: Product) => void;
   onDelete: (productId: number) => void;
   onBulkDelete: (productIds: number[]) => void;
   searchTerm: string;
@@ -30,6 +32,7 @@ export default function ProductTable({
   products,
   isLoading,
   onEdit,
+  onEditStock,
   onDelete,
   onBulkDelete,
   searchTerm,
@@ -126,6 +129,9 @@ export default function ProductTable({
                 Stok
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Min. Stok
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Tip
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -168,19 +174,35 @@ export default function ProductTable({
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`text-sm font-medium ${
-                      product.stock > 10
-                        ? "text-green-600"
-                        : product.stock > 0
-                        ? "text-yellow-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {product.stock}{" "}
-                    {product.type.id === PRODUCT_TYPES.WEIGHT
-                      ? PRODUCT_TYPE_LABELS[PRODUCT_TYPES.WEIGHT].unit
-                      : PRODUCT_TYPE_LABELS[PRODUCT_TYPES.PIECE].unit}
+                  <div className="flex items-center space-x-2">
+                    <span
+                      className={`text-sm font-medium ${
+                        product.minStockLevel &&
+                        product.stock <= product.minStockLevel
+                          ? "text-red-600"
+                          : product.stock > 10
+                          ? "text-green-600"
+                          : product.stock > 0
+                          ? "text-yellow-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {product.stock}{" "}
+                      {product.type.id === PRODUCT_TYPES.WEIGHT
+                        ? PRODUCT_TYPE_LABELS[PRODUCT_TYPES.WEIGHT].unit
+                        : PRODUCT_TYPE_LABELS[PRODUCT_TYPES.PIECE].unit}
+                    </span>
+                    {product.minStockLevel &&
+                      product.stock <= product.minStockLevel && (
+                        <span className="text-red-500 text-xs font-medium bg-red-100 px-2 py-1 rounded-full">
+                          ⚠️ Düşük Stok
+                        </span>
+                      )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="text-sm text-gray-600">
+                    {product.minStockLevel || "-"}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -208,6 +230,13 @@ export default function ProductTable({
                     className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
                   >
                     Düzenle
+                  </button>
+                  <button
+                    onClick={() => onEditStock(product)}
+                    className="text-green-600 hover:text-green-800 font-medium transition-colors"
+                    title="Stok Düzenle"
+                  >
+                    Stok
                   </button>
                   <button
                     onClick={() => onDelete(product.id)}

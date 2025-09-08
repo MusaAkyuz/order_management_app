@@ -3,14 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 // Validation şeması
-const productUpdateSchema = z.object({
-  name: z.string().min(1, "Ürün adı zorunludur"),
-  currentPrice: z.number().min(0, "Fiyat negatif olamaz"),
-  stock: z.number().min(0, "Stok negatif olamaz"),
-  description: z.string().optional(),
-  typeId: z.number().min(1, "Ürün tipi seçimi zorunludur"),
-  isActive: z.boolean().optional(),
-});
+const productUpdateSchema = z
+  .object({
+    name: z.string().min(1, "Ürün adı zorunludur").optional(),
+    currentPrice: z.number().min(0, "Fiyat negatif olamaz").optional(),
+    stock: z.number().min(0, "Stok negatif olamaz").optional(),
+    minStockLevel: z.number().min(0, "Minimum stok negatif olamaz").optional(),
+    description: z.string().optional(),
+    typeId: z.number().min(1, "Ürün tipi seçimi zorunludur").optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "En az bir alan güncellenmelidir",
+  });
 
 // GET - Tek Ürün Getir
 export async function GET(
@@ -90,46 +95,61 @@ export async function PUT(
       );
     }
 
-    // Aynı isimde başka ürün var mı kontrol et (kendisi hariç)
-    const duplicateProduct = await prisma.product.findFirst({
-      where: {
-        name: validatedData.name,
-        id: { not: productId },
-        isActive: true,
-      },
-    });
+    // Aynı isimde başka ürün var mı kontrol et (kendisi hariç) - sadece name güncellenmişse
+    if (validatedData.name) {
+      const duplicateProduct = await prisma.product.findFirst({
+        where: {
+          name: validatedData.name,
+          id: { not: productId },
+          isActive: true,
+        },
+      });
 
-    if (duplicateProduct) {
-      return NextResponse.json(
-        { success: false, error: "Bu isimde başka bir ürün zaten mevcut" },
-        { status: 400 }
-      );
+      if (duplicateProduct) {
+        return NextResponse.json(
+          { success: false, error: "Bu isimde başka bir ürün zaten mevcut" },
+          { status: 400 }
+        );
+      }
     }
 
-    // ProductType var mı kontrol et
-    const productType = await prisma.productType.findUnique({
-      where: { id: validatedData.typeId },
-    });
+    // ProductType var mı kontrol et - sadece typeId güncellenmişse
+    if (validatedData.typeId) {
+      const productType = await prisma.productType.findUnique({
+        where: { id: validatedData.typeId },
+      });
 
-    if (!productType) {
-      return NextResponse.json(
-        { success: false, error: "Geçersiz ürün tipi" },
-        { status: 400 }
-      );
+      if (!productType) {
+        return NextResponse.json(
+          { success: false, error: "Geçersiz ürün tipi" },
+          { status: 400 }
+        );
+      }
     }
+
+    // Güncellenecek alanları hazırla
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (validatedData.name !== undefined) updateData.name = validatedData.name;
+    if (validatedData.currentPrice !== undefined)
+      updateData.currentPrice = validatedData.currentPrice;
+    if (validatedData.stock !== undefined)
+      updateData.stock = validatedData.stock;
+    if (validatedData.minStockLevel !== undefined)
+      updateData.minStockLevel = validatedData.minStockLevel;
+    if (validatedData.description !== undefined)
+      updateData.description = validatedData.description;
+    if (validatedData.typeId !== undefined)
+      updateData.typeId = validatedData.typeId;
+    if (validatedData.isActive !== undefined)
+      updateData.isActive = validatedData.isActive;
 
     // Ürünü güncelle
     const updatedProduct = await prisma.product.update({
       where: { id: productId },
-      data: {
-        name: validatedData.name,
-        currentPrice: validatedData.currentPrice,
-        stock: validatedData.stock,
-        description: validatedData.description,
-        typeId: validatedData.typeId,
-        isActive: validatedData.isActive ?? existingProduct.isActive,
-        updatedAt: new Date(),
-      },
+      data: updateData,
       include: {
         type: {
           select: {

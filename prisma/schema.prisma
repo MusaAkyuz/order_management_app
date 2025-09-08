@@ -43,6 +43,7 @@ model Product {
   name        String
   currentPrice       Float
   stock       Int
+  minStockLevel      Int?     // Minimum stok seviyesi - bu sayının altına düştüğünde uyarı verilir
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())

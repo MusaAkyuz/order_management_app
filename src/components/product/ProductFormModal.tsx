@@ -9,6 +9,7 @@ interface Product {
   name: string;
   currentPrice: number;
   stock: number;
+  minStockLevel?: number;
   description?: string;
   isActive: boolean;
   createdAt: Date;
@@ -30,6 +31,7 @@ interface ProductFormData {
   name: string;
   currentPrice: number;
   stock: number;
+  minStockLevel?: number;
   description?: string;
   typeId: number;
   isActive?: boolean;
@@ -137,6 +139,7 @@ export default function ProductFormModal({
         setValue("name", product.name);
         setValue("currentPrice", product.currentPrice);
         setValue("stock", product.stock);
+        setValue("minStockLevel", (product as any).minStockLevel || undefined);
         setValue("description", product.description || "");
         setValue("typeId", product.type.id);
         setValue("isActive", product.isActive);
@@ -153,6 +156,7 @@ export default function ProductFormModal({
           name: "",
           currentPrice: 0,
           stock: 0,
+          minStockLevel: undefined,
           description: "",
           typeId: productTypes[0]?.id || 1,
           isActive: true,
@@ -347,10 +351,35 @@ export default function ProductFormModal({
                 })}
                 className="w-full px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-600"
                 placeholder="0"
+                autoComplete="off"
               />
               {errors.stock && (
                 <p className="mt-1 text-sm text-red-600">
                   {errors.stock.message}
+                </p>
+              )}
+            </div>
+
+            {/* Minimum Stok Seviyesi */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Minimum Stok Seviyesi
+                <span className="text-xs text-gray-500 ml-1">(Uyarı için)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                {...register("minStockLevel", {
+                  min: { value: 0, message: "Minimum stok negatif olamaz" },
+                  valueAsNumber: true,
+                })}
+                className="w-full px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-600"
+                placeholder="Bu sayının altına düştüğünde uyarı verilir"
+                autoComplete="off"
+              />
+              {errors.minStockLevel && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.minStockLevel.message}
                 </p>
               )}
             </div>
