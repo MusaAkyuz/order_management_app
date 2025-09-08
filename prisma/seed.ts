@@ -88,7 +88,7 @@ async function main() {
     {
       category: "PROFIT_MARGINS",
       key: "DEFAULT_MARGIN",
-      value: "15",
+      value: "25",
       description: "Varsayılan kazanç marjı (%)",
       dataType: "NUMBER",
     },

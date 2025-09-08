@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { PRODUCT_TYPES, PRODUCT_TYPE_LABELS } from "../../constants";
+import { formatCurrency } from "../../utils/currency";
 
 interface Product {
   id: number;
@@ -50,7 +51,36 @@ export default function ProductFormModal({
   productTypes,
 }: ProductFormModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [costPrice, setCostPrice] = useState(0); // Geliş fiyatı
+  const [profitMargin, setProfitMargin] = useState(20); // Kar marjı % - varsayılan 20
+  const [calculatedPrice, setCalculatedPrice] = useState(0); // Hesaplanan satış fiyatı
+  const [defaultProfitMargin, setDefaultProfitMargin] = useState(20); // LOOKUP'tan gelen varsayılan kar marjı
   const isEdit = !!product;
+
+  // LOOKUP tablosundan profit margin'i çek
+  const fetchDefaultProfitMargin = async () => {
+    try {
+      const response = await fetch(
+        "/api/lookup?category=PROFIT_MARGINS&key=DEFAULT_MARGIN"
+      );
+      const result = await response.json();
+
+      if (result.success && result.data.length > 0) {
+        const margin = parseFloat(result.data[0].value) || 20;
+        setDefaultProfitMargin(margin);
+        // Eğer yeni ürün ise veya kar marjı henüz değiştirilmemişse varsayılan değeri kullan
+        if (!product || profitMargin === 20) {
+          setProfitMargin(margin);
+        }
+      } else {
+        console.log("Default profit margin not found, using 20%");
+        setDefaultProfitMargin(20);
+      }
+    } catch (error) {
+      console.error("Error fetching default profit margin:", error);
+      setDefaultProfitMargin(20);
+    }
+  };
 
   const {
     register,
@@ -64,6 +94,30 @@ export default function ProductFormModal({
   // Seçili ürün tipini izle
   const selectedTypeId = watch("typeId");
 
+  // Geliş fiyatı ve kar marjından satış fiyatını hesapla
+  const calculateSellingPrice = (cost: number, margin: number) => {
+    if (cost <= 0 || margin < 0) return 0;
+    return cost * (1 + margin / 100);
+  };
+
+  // Geliş fiyatı değiştiğinde hesapla
+  const handleCostPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cost = parseFloat(e.target.value) || 0;
+    setCostPrice(cost);
+    const sellingPrice = calculateSellingPrice(cost, profitMargin);
+    setCalculatedPrice(sellingPrice);
+    setValue("currentPrice", sellingPrice);
+  };
+
+  // Kar marjı değiştiğinde hesapla
+  const handleProfitMarginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const margin = parseFloat(e.target.value) || 0;
+    setProfitMargin(margin);
+    const sellingPrice = calculateSellingPrice(costPrice, margin);
+    setCalculatedPrice(sellingPrice);
+    setValue("currentPrice", sellingPrice);
+  };
+
   // Seçili ürün tipine göre etiketleri al
   const getTypeLabels = () => {
     if (selectedTypeId === PRODUCT_TYPES.WEIGHT) {
@@ -76,6 +130,9 @@ export default function ProductFormModal({
 
   useEffect(() => {
     if (isOpen) {
+      // İlk önce varsayılan profit margin'i çek
+      fetchDefaultProfitMargin();
+
       if (product) {
         setValue("name", product.name);
         setValue("currentPrice", product.currentPrice);
@@ -83,6 +140,14 @@ export default function ProductFormModal({
         setValue("description", product.description || "");
         setValue("typeId", product.type.id);
         setValue("isActive", product.isActive);
+
+        // Düzenleme modunda varsayılan değerler - mevcut fiyattan ters hesaplama
+        // LOOKUP'tan gelen veya varsayılan kar marjını kullan
+        const estimatedCostPrice =
+          product.currentPrice / (1 + defaultProfitMargin / 100);
+        setCostPrice(estimatedCostPrice);
+        setProfitMargin(defaultProfitMargin);
+        setCalculatedPrice(product.currentPrice);
       } else {
         reset({
           name: "",
@@ -92,9 +157,14 @@ export default function ProductFormModal({
           typeId: productTypes[0]?.id || 1,
           isActive: true,
         });
+
+        // Yeni ürün için varsayılan değerler
+        setCostPrice(0);
+        setProfitMargin(defaultProfitMargin); // LOOKUP'tan gelen değer
+        setCalculatedPrice(0);
       }
     }
-  }, [isOpen, product, setValue, reset, productTypes]);
+  }, [isOpen, product, setValue, reset, productTypes, defaultProfitMargin]);
 
   const onSubmit = async (data: ProductFormData) => {
     setIsLoading(true);
@@ -196,22 +266,64 @@ export default function ProductFormModal({
               )}
             </div>
 
-            {/* Fiyat */}
+            {/* Geliş Fiyatı ve Kar Marjı */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Geliş Fiyatı */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Geliş Fiyatı <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costPrice}
+                  onChange={handleCostPriceChange}
+                  className="w-full px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-600"
+                  placeholder="0.00"
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Kar Marjı */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Kar Marjı (%) <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-1">
+                    (Varsayılan: %{defaultProfitMargin})
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="1000"
+                  value={profitMargin}
+                  onChange={handleProfitMarginChange}
+                  className="w-full px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-600"
+                  placeholder={defaultProfitMargin.toString()}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            {/* Hesaplanan Satış Fiyatı (Görüntüleme Amaçlı) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {typeLabels.priceLabel} <span className="text-red-500">*</span>
+                {typeLabels.priceLabel} (Hesaplanan)
               </label>
+              <div className="w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md font-medium">
+                {formatCurrency(calculatedPrice)}
+              </div>
+
+              {/* Gizli input - API'ye gönderilecek asıl fiyat */}
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="hidden"
                 {...register("currentPrice", {
-                  required: "Fiyat zorunludur",
-                  min: { value: 0, message: "Fiyat negatif olamaz" },
+                  required: "Fiyat hesaplanamadı",
+                  min: { value: 0.01, message: "Fiyat 0'dan büyük olmalıdır" },
                   valueAsNumber: true,
                 })}
-                className="w-full px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-600"
-                placeholder="0.00"
               />
               {errors.currentPrice && (
                 <p className="mt-1 text-sm text-red-600">
