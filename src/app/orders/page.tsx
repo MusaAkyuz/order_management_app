@@ -176,9 +176,12 @@ export default function Orders() {
                       {new Date(order.createdAt).toLocaleDateString("tr-TR")}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button className="text-blue-600 hover:text-blue-900 mr-3">
+                      <a
+                        href={`/orders/${order.id}`}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                      >
                         Görüntüle
-                      </button>
+                      </a>
                       <button className="text-green-600 hover:text-green-900 mr-3">
                         Düzenle
                       </button>

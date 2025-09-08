@@ -184,7 +184,7 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
           },
         };
       } else {
-        const product = products.find((p) => p.id === item.productId);
+        const product = products?.find((p) => p.id === item.productId);
         return {
           ...item,
           product,
@@ -592,7 +592,7 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
   }, [pdfUrl]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col p-4">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-800">PDF Önizleme</h3>
         {pdfUrl && (
@@ -614,7 +614,10 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
         )}
       </div>
 
-      <div className="flex-1 border border-gray-300 rounded">
+      <div
+        className="flex-1 border border-gray-300 rounded"
+        style={{ minHeight: "700px" }}
+      >
         {pdfUrl ? (
           <iframe
             ref={iframeRef}
