@@ -109,7 +109,7 @@ export default function StockEditModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0  bg-opacity-40 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       ></div>
 

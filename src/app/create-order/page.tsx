@@ -216,11 +216,11 @@ export default function CreateOrder() {
       const response = await fetch("/api/customers");
       const result = await response.json();
 
-      console.log("rrrr2", result.data);
-
       if (result.success) {
         setCustomers(result.data.filter((c: Customer) => true));
       }
+
+      location.reload();
     } catch (error) {
       console.error("Müşteri listesi yenilenirken hata:", error);
     }

@@ -3,6 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 
+// Sadece statü güncelleme için schema
+const updateStatusSchema = z.object({
+  statusId: z.number().min(1, "Statü seçimi zorunludur"),
+});
+
 // Sipariş güncelleme için validation schema
 const updateOrderSchema = z.object({
   customerId: z.number().min(1, "Müşteri seçimi zorunludur"),
@@ -107,6 +112,74 @@ export async function PUT(
   try {
     const orderId = parseInt(params.id);
     const body = await request.json();
+
+    // Sadece statusId varsa status güncellemesi yap
+    if (body.statusId && Object.keys(body).length === 1) {
+      const validatedData = updateStatusSchema.parse(body);
+
+      const order = await prisma.$transaction(
+        async (tx: Prisma.TransactionClient) => {
+          // Mevcut siparişi kontrol et
+          const existingOrder = await tx.order.findUnique({
+            where: { id: orderId, isActive: true },
+          });
+
+          if (!existingOrder) {
+            throw new Error("Sipariş bulunamadı");
+          }
+
+          // Siparişi güncelle
+          const updatedOrder = await tx.order.update({
+            where: { id: orderId },
+            data: {
+              statusId: validatedData.statusId,
+            },
+            include: {
+              customer: true,
+              status: true,
+              orderItems: {
+                include: {
+                  product: {
+                    include: {
+                      type: true,
+                    },
+                  },
+                },
+                where: { isActive: true },
+              },
+            },
+          });
+
+          // Status değişikliği logunu ekle
+          const status = await tx.orderStatus.findUnique({
+            where: { id: validatedData.statusId },
+          });
+
+          await tx.transaction.create({
+            data: {
+              action: "ORDER_STATUS_CHANGED",
+              description: `Sipariş durumu "${status?.name}" olarak değiştirildi`,
+              details: JSON.stringify({
+                orderId,
+                oldStatusId: existingOrder.statusId,
+                newStatusId: validatedData.statusId,
+              }),
+              customerId: existingOrder.customerId,
+              orderId,
+            },
+          });
+
+          return updatedOrder;
+        }
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: order,
+      });
+    }
+
+    // Tam sipariş güncellemesi
     const validatedData = updateOrderSchema.parse(body);
 
     const order = await prisma.$transaction(

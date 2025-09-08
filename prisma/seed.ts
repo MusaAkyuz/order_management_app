@@ -11,6 +11,11 @@ async function main() {
       color: "#FFD700", // Sarı
     },
     {
+      name: "Ücreti Ödendi",
+      description: "Sipariş ücreti ödendi",
+      color: "#17A2B8", // Mavi
+    },
+    {
       name: "Teslim Edildi",
       description: "Sipariş başarıyla teslim edildi",
       color: "#28A745", // Yeşil
