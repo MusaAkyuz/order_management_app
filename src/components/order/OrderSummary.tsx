@@ -13,6 +13,7 @@ interface OrderSummaryProps {
   discountValue: number;
   submitLoading: boolean;
   onShowPDFPreview?: () => void;
+  isEditMode?: boolean;
 }
 
 export default function OrderSummary({
@@ -28,6 +29,7 @@ export default function OrderSummary({
   discountValue,
   submitLoading,
   onShowPDFPreview,
+  isEditMode = false,
 }: OrderSummaryProps) {
   return (
     <div className="space-y-6">
@@ -112,13 +114,19 @@ export default function OrderSummary({
 
       {/* Butonlar */}
       <div className="space-y-3">
-        {/* Sipariş Oluştur Butonu */}
+        {/* Sipariş Oluştur/Güncelle Butonu */}
         <button
           type="submit"
           disabled={submitLoading}
           className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
         >
-          {submitLoading ? "Sipariş Oluşturuluyor..." : "Sipariş Oluştur"}
+          {submitLoading
+            ? isEditMode
+              ? "Sipariş Güncelleniyor..."
+              : "Sipariş Oluşturuluyor..."
+            : isEditMode
+            ? "Sipariş Güncelle"
+            : "Sipariş Oluştur"}
         </button>
       </div>
     </div>

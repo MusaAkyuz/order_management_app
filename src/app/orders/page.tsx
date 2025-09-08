@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import Layout from "../../components/Layout";
 
 interface Order {
@@ -29,6 +30,7 @@ interface Order {
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchOrders() {
@@ -54,6 +56,50 @@ export default function Orders() {
 
     fetchOrders();
   }, []);
+
+  // Sipariş silme fonksiyonu
+  const handleDeleteOrder = async (orderId: number) => {
+    if (
+      !confirm(
+        "Bu siparişi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz."
+      )
+    ) {
+      return;
+    }
+
+    setDeleteLoading(orderId);
+    const loadingToast = toast.loading("Sipariş siliniyor...");
+
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success("Sipariş başarıyla silindi!", {
+          id: loadingToast,
+        });
+
+        // Siparişi listeden kaldır
+        setOrders((prevOrders) =>
+          prevOrders.filter((order) => order.id !== orderId)
+        );
+      } else {
+        toast.error(result.error || "Sipariş silinirken hata oluştu", {
+          id: loadingToast,
+        });
+      }
+    } catch (error) {
+      console.error("Sipariş silinirken hata:", error);
+      toast.error("Sipariş silinirken bir hata oluştu", {
+        id: loadingToast,
+      });
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -182,11 +228,22 @@ export default function Orders() {
                       >
                         Görüntüle
                       </a>
-                      <button className="text-green-600 hover:text-green-900 mr-3">
+                      <a
+                        href={`/orders/${order.id}/edit`}
+                        className="text-green-600 hover:text-green-900 mr-3"
+                      >
                         Düzenle
-                      </button>
-                      <button className="text-red-600 hover:text-red-900">
-                        Sil
+                      </a>
+                      <button
+                        onClick={() => handleDeleteOrder(order.id)}
+                        disabled={deleteLoading === order.id}
+                        className={`text-red-600 hover:text-red-900 ${
+                          deleteLoading === order.id
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                      >
+                        {deleteLoading === order.id ? "Siliniyor..." : "Sil"}
                       </button>
                     </td>
                   </tr>

@@ -5,9 +5,43 @@ import type { Prisma } from "@prisma/client";
 
 // Sipariş güncelleme için validation schema
 const updateOrderSchema = z.object({
-  statusId: z.number().optional(),
-  laborCost: z.number().optional(),
-  deliveryFee: z.number().optional(),
+  customerId: z.number().min(1, "Müşteri seçimi zorunludur"),
+  address: z.string(),
+  description: z.string(),
+  laborCost: z.number().min(0, "İşçilik maliyeti negatif olamaz"),
+  deliveryFee: z.number().min(0, "Teslimat ücreti negatif olamaz"),
+  taxRate: z
+    .number()
+    .min(0, "KDV oranı negatif olamaz")
+    .max(100, "KDV oranı 100'den fazla olamaz"),
+  discountType: z.enum(["percentage", "amount"]),
+  discountValue: z.number().min(0, "İndirim değeri negatif olamaz"),
+  orderItems: z
+    .array(
+      z
+        .object({
+          productId: z.number().min(0),
+          quantity: z.number().min(1, "Miktar en az 1 olmalıdır"),
+          price: z.number().min(0.01, "Fiyat 0'dan büyük olmalıdır"),
+          isManual: z.boolean().optional(),
+          manualName: z.string().optional(),
+        })
+        .refine(
+          (data) => {
+            // Manuel ürün ise productId 0 olabilir, ama manualName dolu olmalı
+            if (data.isManual) {
+              return data.manualName && data.manualName.trim().length > 0;
+            }
+            // Manuel değilse productId dolu olmalı
+            return data.productId > 0;
+          },
+          {
+            message: "Ürün seçimi veya manuel ürün adı zorunludur",
+            path: ["productId"],
+          }
+        )
+    )
+    .min(1, "En az bir ürün eklemelisiniz"),
 });
 
 // GET - Tekil Sipariş
@@ -77,76 +111,141 @@ export async function PUT(
 
     const order = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
-        // Mevcut siparişi kontrol et
+        // Mevcut siparişi ve kalemlerini getir
         const existingOrder = await tx.order.findUnique({
           where: { id: orderId, isActive: true },
+          include: {
+            orderItems: {
+              where: { isActive: true },
+            },
+          },
         });
 
         if (!existingOrder) {
           throw new Error("Sipariş bulunamadı");
         }
 
-        // Yeni toplam fiyatı hesapla
-        let newTotalPrice = existingOrder.totalPrice;
-        if (
-          validatedData.laborCost !== undefined ||
-          validatedData.deliveryFee !== undefined
-        ) {
-          const orderItems = await tx.orderItem.findMany({
-            where: { orderId, isActive: true },
+        // Mevcut sipariş kalemlerinin stoklarını geri ekle
+        for (const existingItem of existingOrder.orderItems) {
+          if (existingItem.productId) {
+            await tx.product.update({
+              where: { id: existingItem.productId },
+              data: {
+                stock: {
+                  increment: existingItem.quantity,
+                },
+              },
+            });
+          }
+        }
+
+        // Mevcut sipariş kalemlerini pasif yap
+        await tx.orderItem.updateMany({
+          where: { orderId, isActive: true },
+          data: { isActive: false },
+        });
+
+        // Yeni sipariş kalemlerini oluştur ve stokları düş
+        for (const item of validatedData.orderItems) {
+          // Sipariş kalemini oluştur
+          await tx.orderItem.create({
+            data: {
+              orderId,
+              productId: item.productId || null,
+              quantity: item.quantity,
+              price: item.price,
+              isManual: item.isManual || false,
+              manualName: item.manualName || null,
+              isActive: true,
+            },
           });
 
-          const itemsTotal = orderItems.reduce(
-            (sum: number, item: any) => sum + item.price * item.quantity,
-            0
-          );
-          const laborCost = validatedData.laborCost ?? existingOrder.laborCost;
-          const deliveryFee =
-            validatedData.deliveryFee ?? existingOrder.deliveryFee;
-          newTotalPrice = itemsTotal + laborCost + deliveryFee;
+          // Eğer manuel ürün değilse stoktan düş
+          if (!item.isManual && item.productId && item.productId > 0) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
+              },
+            });
+          }
         }
+
+        // Toplam fiyatı hesapla
+        const itemsTotal = validatedData.orderItems.reduce(
+          (sum, item) => sum + item.quantity * item.price,
+          0
+        );
+
+        // KDV hesapla
+        const taxAmount = (itemsTotal * validatedData.taxRate) / 100;
+
+        // Ara toplam (Ürünler + KDV + İşçilik + Teslimat)
+        const subtotal =
+          itemsTotal +
+          taxAmount +
+          validatedData.laborCost +
+          validatedData.deliveryFee;
+
+        // İndirim hesapla
+        let discountAmount = 0;
+        if (validatedData.discountValue > 0) {
+          if (validatedData.discountType === "percentage") {
+            discountAmount = (subtotal * validatedData.discountValue) / 100;
+          } else {
+            discountAmount = validatedData.discountValue;
+          }
+        }
+
+        // Net toplam
+        const totalPrice = Math.max(0, subtotal - discountAmount);
 
         // Siparişi güncelle
         const updatedOrder = await tx.order.update({
           where: { id: orderId },
           data: {
-            ...validatedData,
-            totalPrice: newTotalPrice,
+            customerId: validatedData.customerId,
+            address: validatedData.address,
+            description: validatedData.description,
+            laborCost: validatedData.laborCost,
+            deliveryFee: validatedData.deliveryFee,
+            taxRate: validatedData.taxRate,
+            discountType: validatedData.discountType,
+            discountValue: validatedData.discountValue,
+            totalPrice,
           },
           include: {
             customer: true,
             status: true,
             orderItems: {
               include: {
-                product: true,
+                product: {
+                  include: {
+                    type: true,
+                  },
+                },
               },
+              where: { isActive: true },
             },
           },
         });
 
-        // Durum değişikliği logunu ekle
-        if (
-          validatedData.statusId &&
-          validatedData.statusId !== existingOrder.statusId
-        ) {
-          const status = await tx.orderStatus.findUnique({
-            where: { id: validatedData.statusId },
-          });
-
-          await tx.transaction.create({
-            data: {
-              action: "ORDER_STATUS_CHANGED",
-              description: `Sipariş durumu "${status?.name}" olarak değiştirildi`,
-              details: JSON.stringify({
-                orderId,
-                oldStatusId: existingOrder.statusId,
-                newStatusId: validatedData.statusId,
-              }),
-              customerId: existingOrder.customerId,
+        // Transaction log ekle
+        await tx.transaction.create({
+          data: {
+            action: "ORDER_UPDATED",
+            description: `Sipariş güncellendi (ID: ${orderId})`,
+            details: JSON.stringify({
               orderId,
-            },
-          });
-        }
+              totalPrice,
+              itemsCount: validatedData.orderItems.length,
+            }),
+            customerId: validatedData.customerId,
+            orderId,
+          },
+        });
 
         return updatedOrder;
       }
@@ -173,7 +272,8 @@ export async function PUT(
     return NextResponse.json(
       {
         success: false,
-        error: "Sipariş güncellenemedi",
+        error:
+          error instanceof Error ? error.message : "Sipariş güncellenemedi",
       },
       { status: 500 }
     );
@@ -194,7 +294,9 @@ export async function DELETE(
         const existingOrder = await tx.order.findUnique({
           where: { id: orderId, isActive: true },
           include: {
-            orderItems: true,
+            orderItems: {
+              where: { isActive: true },
+            },
             customer: true,
           },
         });
@@ -215,16 +317,19 @@ export async function DELETE(
           data: { isActive: false },
         });
 
-        // Stokları geri ekle
+        // Stokları geri ekle (sadece manuel olmayan ürünler için)
         for (const item of existingOrder.orderItems) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                increment: item.quantity,
+          // Sadece manuel olmayan ve productId'si olan ürünler için stok güncellemesi yap
+          if (item.productId && !item.isManual) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  increment: item.quantity,
+                },
               },
-            },
-          });
+            });
+          }
         }
 
         // Transaction log ekle
