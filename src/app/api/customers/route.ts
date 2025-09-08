@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { CustomerFormData } from "@/types/api";
 
 // Müşteri oluşturma/güncelleme için validation schema
 const customerSchema = z.object({

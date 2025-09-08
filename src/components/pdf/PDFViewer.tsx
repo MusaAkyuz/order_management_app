@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LookupHelper } from "../../lib/lookup";
+import { Customer, Product, PDFOrderItem } from "../../types/api";
 
 // pdfMake dinamik import
 let pdfMake: any = null;
@@ -12,40 +12,14 @@ const loadPdfMake = async () => {
     const pdfFonts = await import("pdfmake/build/vfs_fonts");
 
     pdfMake = pdfMakeModule.default;
-    pdfMake.vfs = (pdfFonts as any).pdfMake.vfs;
+    // pdfMake.vfs = (pdfFonts as any).pdfMake.vfs;
   }
   return pdfMake;
 };
-interface Customer {
-  id: number;
-  name: string;
-  email: string | null;
-  phone?: string | null;
-  address?: string | null;
-  taxNumber?: string | null;
-  isCompany: boolean;
-  isActive?: boolean;
-}
-
-interface Product {
-  id: number;
-  name: string;
-  currentPrice: number;
-  type: {
-    name: string;
-  };
-}
-
-interface OrderItem {
-  productId: number;
-  quantity: number;
-  price: number;
-  product?: Product;
-}
 
 interface PDFData {
   customer?: Customer;
-  orderItems: OrderItem[];
+  orderItems: PDFOrderItem[];
   address?: string;
   description?: string;
   laborCost: number;
@@ -72,11 +46,33 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
   useEffect(() => {
     const loadLookupData = async () => {
       try {
-        const company = await LookupHelper.getCompanyInfo();
-        const currency = await LookupHelper.getCurrencySymbol();
+        // Şirket bilgilerini API'dan getir
+        const companyResponse = await fetch(
+          "/api/lookup?category=COMPANY_INFO"
+        );
+        const companyResult = await companyResponse.json();
 
-        setCompanyInfo(company);
-        setCurrencySymbol(currency);
+        // Para birimi sembolünü API'dan getir
+        const currencyResponse = await fetch(
+          "/api/lookup?category=SYSTEM_SETTINGS&key=CURRENCY_SYMBOL"
+        );
+        const currencyResult = await currencyResponse.json();
+
+        if (companyResult.success && companyResult.data.length > 0) {
+          // Şirket bilgilerini organize et
+          const companyData = companyResult.data.reduce(
+            (acc: any, item: any) => {
+              acc[item.key] = item.processedValue;
+              return acc;
+            },
+            {}
+          );
+          setCompanyInfo(companyData);
+        }
+
+        if (currencyResult.success && currencyResult.data.length > 0) {
+          setCurrencySymbol(currencyResult.data[0].processedValue);
+        }
       } catch (error) {
         console.error("Lookup data yüklenirken hata:", error);
         // Fallback değerler
@@ -121,11 +117,26 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
   const generatePDFContent = () => {
     const customer = data.customer;
     const orderItems = data.orderItems.map((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      return {
-        ...item,
-        product,
-      };
+      if (item.isManual) {
+        return {
+          ...item,
+          product: {
+            id: 0,
+            name: item.manualName || "Manuel Ürün",
+            currentPrice: item.price,
+            stock: 0,
+            isActive: true,
+            typeId: 1,
+            type: { id: 1, name: "Adet ile Satılan" },
+          },
+        };
+      } else {
+        const product = products.find((p) => p.id === item.productId);
+        return {
+          ...item,
+          product,
+        };
+      }
     });
 
     const subtotal = calculateSubtotal();

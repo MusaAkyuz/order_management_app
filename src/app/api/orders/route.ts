@@ -13,11 +13,27 @@ const createOrderSchema = z.object({
   deliveryFee: z.number().default(0),
   orderItems: z
     .array(
-      z.object({
-        productId: z.number(),
-        quantity: z.number().positive(),
-        price: z.number().positive(),
-      })
+      z
+        .object({
+          productId: z.number().optional(),
+          quantity: z.number().positive(),
+          price: z.number().positive(),
+          isManual: z.boolean().optional(),
+          manualName: z.string().optional(),
+        })
+        .refine(
+          (data) => {
+            // Manuel ürün ise manualName dolu olmalı
+            if (data.isManual) {
+              return data.manualName && data.manualName.trim().length > 0;
+            }
+            // Manuel değilse productId dolu olmalı
+            return data.productId && data.productId > 0;
+          },
+          {
+            message: "Ürün seçimi veya manuel ürün adı zorunludur",
+          }
+        )
     )
     .min(1),
 });
@@ -60,22 +76,26 @@ export async function POST(request: NextRequest) {
         await tx.orderItem.createMany({
           data: validatedData.orderItems.map((item) => ({
             orderId: newOrder.id,
-            productId: item.productId,
+            productId: item.isManual ? null : item.productId || null,
             quantity: item.quantity,
             price: item.price,
-          })),
+            isManual: item.isManual || false,
+            manualName: item.isManual ? item.manualName || null : null,
+          })) as any,
         });
 
-        // Stok güncelle
+        // Stok güncelle (sadece manuel olmayan ürünler için)
         for (const item of validatedData.orderItems) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                decrement: item.quantity,
+          if (!item.isManual && item.productId) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
               },
-            },
-          });
+            });
+          }
         }
 
         // Transaction log ekle

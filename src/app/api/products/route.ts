@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { Product } from "@/types/api";
 
 // Validation şeması
 const productSchema = z.object({
@@ -12,7 +13,9 @@ const productSchema = z.object({
 });
 
 // GET - Ürün Listesi (Tüm ürünler - aktif/pasif dahil)
-export async function GET() {
+export async function GET(): Promise<
+  NextResponse<{ success: boolean; data?: Product[]; error?: string }>
+> {
   try {
     const products = await prisma.product.findMany({
       include: {

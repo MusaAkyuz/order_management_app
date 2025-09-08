@@ -5,19 +5,9 @@ import {
   UseFormSetValue,
 } from "react-hook-form";
 import { useState } from "react";
-import CreateCustomerModal from "../customer/CreateCustomerModal";
+import CustomerFormModal from "../customer/CustomerFormModal";
 import SearchableSelect from "../SearchableSelect";
-
-interface Customer {
-  id: number;
-  name: string;
-  email: string | null;
-  address: string | null;
-  isCompany: boolean;
-  isActive: boolean;
-  phone?: string | null;
-  taxNumber?: string | null;
-}
+import { Customer } from "../../types/api";
 
 interface OrderFormData {
   customerId: number;
@@ -52,6 +42,7 @@ export default function CustomerInfo({
   onCustomerCreated,
 }: CustomerInfoProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const selectedCustomerId = watch("customerId");
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
@@ -74,26 +65,17 @@ export default function CustomerInfo({
     }
   };
 
-  // Yeni müşteri oluşturulduktan sonra
-  const handleCustomerCreated = (newCustomer: Customer) => {
-    // Yeni müşteriyi otomatik seç
-    setValue("customerId", newCustomer.id);
-
-    // Adresini otomatik doldur
-    if (newCustomer.address) {
-      setValue("address", newCustomer.address);
-    }
-
+  // Yeni müşteri oluşturulduktan sonra (CustomerFormModal için)
+  const handleCustomerSuccess = async (customer: Customer) => {
     // Modal'ı kapat
     setShowCreateModal(false);
 
-    // Parent component'e bildir
     if (onCustomerCreated) {
-      onCustomerCreated(newCustomer);
+      // Parent component'deki handleCustomerCreated fonksiyonunu çağır
+      // Bu fonksiyon müşteri listesini yeniden yükleyecek
+      await onCustomerCreated(customer);
     }
-  };
-
-  // SearchableSelect için müşteri seçim handler'ı
+  }; // SearchableSelect için müşteri seçim handler'ı
   const handleSearchableSelectChange = (value: string | number) => {
     if (value === "create-new") {
       setShowCreateModal(true);
@@ -182,11 +164,12 @@ export default function CustomerInfo({
       </div>
 
       {/* Yeni Müşteri Oluşturma Modal'ı */}
-      <CreateCustomerModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCustomerCreated={handleCustomerCreated}
-      />
+      {showCreateModal && (
+        <CustomerFormModal
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={(item) => handleCustomerSuccess(item)}
+        />
+      )}
     </>
   );
 }

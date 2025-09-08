@@ -1,33 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
-
-interface Customer {
-  id: number;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  taxNumber: string | null;
-  isCompany: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CustomerFormData {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  taxNumber: string;
-  isCompany: boolean;
-}
+import { Customer, CustomerFormData } from "../../types/api";
 
 interface CustomerFormModalProps {
   editingCustomer?: Customer | null;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (item: Customer) => void;
 }
 
 export default function CustomerFormModal({
@@ -35,6 +16,7 @@ export default function CustomerFormModal({
   onClose,
   onSuccess,
 }: CustomerFormModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [formData, setFormData] = useState<CustomerFormData>({
     name: editingCustomer?.name || "",
     email: editingCustomer?.email || "",
@@ -44,6 +26,10 @@ export default function CustomerFormModal({
     isCompany: editingCustomer?.isCompany || false,
   });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Form gönderimi
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,9 +53,11 @@ export default function CustomerFormModal({
 
       const result = await response.json();
 
+      console.log("rrrr", result);
+
       if (result.success) {
         toast.success(result.message || "İşlem başarılı!");
-        onSuccess();
+        onSuccess(result.data); // Yeni eklenen veya güncellenen müşteri verisini gönder
       } else {
         toast.error(result.error || "Bir hata oluştu");
       }
@@ -88,7 +76,12 @@ export default function CustomerFormModal({
     }
   };
 
-  return (
+  // Server-side rendering sırasında portal'ı render etme
+  if (!mounted) {
+    return null;
+  }
+
+  return createPortal(
     <div
       className="fixed inset-0 bg-opacity-40 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300"
       onClick={handleBackdropClick}
@@ -405,6 +398,7 @@ export default function CustomerFormModal({
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

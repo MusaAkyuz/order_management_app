@@ -34,6 +34,8 @@ interface OrderFormData {
     productId: number;
     quantity: number;
     price: number;
+    isManual?: boolean;
+    manualName?: string;
   }>;
 }
 
@@ -102,7 +104,15 @@ export default function OrderItems({
         </label>
         <button
           type="button"
-          onClick={() => append({ productId: 0, quantity: 1, price: 0 })}
+          onClick={() =>
+            append({
+              productId: 0,
+              quantity: 1,
+              price: 0,
+              isManual: false,
+              manualName: "",
+            })
+          }
           className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors"
         >
           Ürün Ekle
@@ -111,7 +121,8 @@ export default function OrderItems({
 
       {/* Başlık Satırı */}
       <div className="grid grid-cols-12 gap-2 mb-2 text-xs font-semibold text-gray-700 px-2">
-        <div className="col-span-4">Ürün</div>
+        <div className="col-span-1">Manuel</div>
+        <div className="col-span-3">Ürün</div>
         <div className="col-span-2">Stok</div>
         <div className="col-span-2">Miktar</div>
         <div className="col-span-2">Birim Fiyat</div>
@@ -124,40 +135,94 @@ export default function OrderItems({
           key={field.id}
           className="grid grid-cols-12 gap-2 items-center bg-gray-50 border border-gray-200 rounded-md p-2 mb-2"
         >
-          {/* Ürün Seçimi */}
-          <div className="col-span-4">
-            <SearchableSelect
-              options={products.map((product) => {
-                const typeConfig =
-                  PRODUCT_TYPE_LABELS[
-                    product.typeId as keyof typeof PRODUCT_TYPE_LABELS
-                  ];
-                const unit = typeConfig?.unit || "adet";
-                return {
-                  value: product.id,
-                  label: product.name,
-                  description: `Stok: ${
-                    product.stock
-                  } ${unit} - ₺${product.currentPrice.toFixed(2)}`,
-                };
-              })}
-              value={watchedItems[index]?.productId || ""}
-              onChange={(value) => {
-                setValue(`orderItems.${index}.productId`, Number(value));
-                handleProductChange(index, Number(value));
+          {/* Manuel Checkbox */}
+          <div className="col-span-1 flex justify-center">
+            <input
+              type="checkbox"
+              {...register(`orderItems.${index}.isManual`)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+              onChange={(e) => {
+                setValue(`orderItems.${index}.isManual`, e.target.checked);
+                if (e.target.checked) {
+                  setValue(`orderItems.${index}.productId`, 0);
+                  setValue(`orderItems.${index}.price`, 0);
+                  setValue(`orderItems.${index}.manualName`, "");
+                } else {
+                  setValue(`orderItems.${index}.manualName`, "");
+                  setValue(`orderItems.${index}.productId`, 0);
+                  setValue(`orderItems.${index}.price`, 0);
+                }
               }}
-              placeholder="Ürün seçin veya arayın"
-              error={errors.orderItems?.[index]?.productId?.message}
-              className="text-xs"
             />
+          </div>
+
+          {/* Ürün Seçimi veya Manuel Girdi */}
+          <div className="col-span-3">
+            {watchedItems[index]?.isManual ? (
+              <>
+                <input
+                  type="text"
+                  {...register(`orderItems.${index}.manualName`)}
+                  className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
+                  placeholder="Ürün adını yazın"
+                />
+                {/* Manuel mod için gizli productId */}
+                <input
+                  type="hidden"
+                  {...register(`orderItems.${index}.productId`)}
+                  value={0}
+                />
+              </>
+            ) : (
+              <>
+                <SearchableSelect
+                  options={products.map((product) => {
+                    const typeConfig =
+                      PRODUCT_TYPE_LABELS[
+                        product.typeId as keyof typeof PRODUCT_TYPE_LABELS
+                      ];
+                    const unit = typeConfig?.unit || "adet";
+                    return {
+                      value: product.id,
+                      label: product.name,
+                      description: `Stok: ${
+                        product.stock
+                      } ${unit} - ₺${product.currentPrice.toFixed(2)}`,
+                    };
+                  })}
+                  value={watchedItems[index]?.productId || ""}
+                  onChange={(value) => {
+                    setValue(`orderItems.${index}.productId`, Number(value));
+                    handleProductChange(index, Number(value));
+                  }}
+                  placeholder="Ürün seçin veya arayın"
+                  error={errors.orderItems?.[index]?.productId?.message}
+                  className="text-xs"
+                />
+                {/* Normal mod için gizli manualName */}
+                <input
+                  type="hidden"
+                  {...register(`orderItems.${index}.manualName`)}
+                  value=""
+                />
+              </>
+            )}
           </div>
 
           {/* Stok Durumu */}
           <div className="col-span-2">
-            <div className="px-2 py-1 text-sm bg-blue-50 border border-blue-200 rounded text-blue-700 text-center">
-              {watchedItems[index]?.productId
+            <div
+              className={`px-2 py-1 text-sm border rounded text-center ${
+                watchedItems[index]?.isManual
+                  ? "bg-gray-100 border-gray-300 text-gray-500"
+                  : "bg-blue-50 border-blue-200 text-blue-700"
+              }`}
+            >
+              {watchedItems[index]?.isManual
+                ? "—"
+                : watchedItems[index]?.productId
                 ? `${getSelectedProductStock(index)} ${getUnitLabel(index)}`
-                : "-"}
+                : "—"}
             </div>
           </div>
 
@@ -167,17 +232,25 @@ export default function OrderItems({
               type="number"
               {...register(`orderItems.${index}.quantity`, {
                 valueAsNumber: true,
-                max: {
-                  value: getSelectedProductStock(index) || 999999,
-                  message: `Maksimum ${getSelectedProductStock(
-                    index
-                  )} ${getUnitLabel(index)} girilebilir`,
-                },
+                max: watchedItems[index]?.isManual
+                  ? undefined
+                  : {
+                      value: getSelectedProductStock(index) || 999999,
+                      message: `Maksimum ${getSelectedProductStock(
+                        index
+                      )} ${getUnitLabel(index)} girilebilir`,
+                    },
               })}
               className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
               min="1"
-              max={getSelectedProductStock(index) || 999999}
-              placeholder={`Miktar (${getUnitLabel(index)})`}
+              max={
+                watchedItems[index]?.isManual
+                  ? undefined
+                  : getSelectedProductStock(index) || 999999
+              }
+              placeholder={`Miktar${
+                watchedItems[index]?.isManual ? "" : ` (${getUnitLabel(index)})`
+              }`}
             />
             {errors.orderItems?.[index]?.quantity && (
               <p className="text-red-500 text-xs mt-1">
@@ -186,18 +259,38 @@ export default function OrderItems({
             )}
           </div>
 
-          {/* Birim Fiyat (Sadece Görüntüleme) */}
+          {/* Birim Fiyat */}
           <div className="col-span-2">
-            <div className="px-2 py-1 text-sm bg-gray-100 border border-gray-300 rounded text-gray-700 text-center">
-              ₺{(watchedItems[index]?.price || 0).toFixed(2)}
-            </div>
-            {/* Gizli input */}
-            <input
-              type="hidden"
-              {...register(`orderItems.${index}.price`, {
-                valueAsNumber: true,
-              })}
-            />
+            {watchedItems[index]?.isManual ? (
+              <input
+                type="number"
+                step="0.01"
+                {...register(`orderItems.${index}.price`, {
+                  valueAsNumber: true,
+                  min: { value: 0.01, message: "Fiyat 0'dan büyük olmalıdır" },
+                })}
+                className="w-full px-2 py-1 text-sm text-gray-800 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-600"
+                placeholder="Birim fiyat"
+              />
+            ) : (
+              <>
+                <div className="px-2 py-1 text-sm bg-gray-100 border border-gray-300 rounded text-gray-700 text-center">
+                  ₺{(watchedItems[index]?.price || 0).toFixed(2)}
+                </div>
+                {/* Gizli input */}
+                <input
+                  type="hidden"
+                  {...register(`orderItems.${index}.price`, {
+                    valueAsNumber: true,
+                  })}
+                />
+              </>
+            )}
+            {errors.orderItems?.[index]?.price && (
+              <p className="text-red-500 text-xs mt-1">
+                {errors.orderItems[index]?.price?.message}
+              </p>
+            )}
           </div>
 
           {/* Ara Toplam */}

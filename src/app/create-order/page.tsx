@@ -14,6 +14,7 @@ import AdditionalCosts from "../../components/order/AdditionalCosts";
 import OrderSummary from "../../components/order/OrderSummary";
 import LoadingSpinner from "../../components/order/LoadingSpinner";
 import PDFViewer from "../../components/pdf/PDFViewer";
+import { Customer, Product } from "../../types/api";
 
 // Zod şeması
 const orderSchema = z.object({
@@ -26,11 +27,28 @@ const orderSchema = z.object({
   discountValue: z.number().min(0, "İndirim değeri negatif olamaz"),
   orderItems: z
     .array(
-      z.object({
-        productId: z.number().min(1, "Ürün seçimi zorunludur"),
-        quantity: z.number().min(1, "Miktar en az 1 olmalıdır"),
-        price: z.number().min(0.01, "Fiyat 0'dan büyük olmalıdır"),
-      })
+      z
+        .object({
+          productId: z.number().min(0),
+          quantity: z.number().min(1, "Miktar en az 1 olmalıdır"),
+          price: z.number().min(0.01, "Fiyat 0'dan büyük olmalıdır"),
+          isManual: z.boolean().optional(),
+          manualName: z.string().optional(),
+        })
+        .refine(
+          (data) => {
+            // Manuel ürün ise productId 0 olabilir, ama manualName dolu olmalı
+            if (data.isManual) {
+              return data.manualName && data.manualName.trim().length > 0;
+            }
+            // Manuel değilse productId dolu olmalı
+            return data.productId > 0;
+          },
+          {
+            message: "Ürün seçimi veya manuel ürün adı zorunludur",
+            path: ["productId"],
+          }
+        )
     )
     .min(1, "En az bir ürün eklemelisiniz"),
 });
@@ -52,28 +70,6 @@ function useDebounce<T>(value: T, delay: number): T {
   }, [value, delay]);
 
   return debouncedValue;
-}
-
-interface Customer {
-  id: number;
-  name: string;
-  email: string | null;
-  address: string | null;
-  isCompany: boolean;
-  isActive: boolean;
-}
-
-interface Product {
-  id: number;
-  name: string;
-  currentPrice: number;
-  stock: number;
-  isActive: boolean;
-  typeId: number;
-  type: {
-    id: number;
-    name: string;
-  };
 }
 
 export default function CreateOrder() {
@@ -101,7 +97,15 @@ export default function CreateOrder() {
       deliveryFee: 0,
       discountType: "percentage" as const,
       discountValue: 0,
-      orderItems: [{ productId: 0, quantity: 1, price: 0 }],
+      orderItems: [
+        {
+          productId: 0,
+          quantity: 1,
+          price: 0,
+          isManual: false,
+          manualName: "",
+        },
+      ],
     },
   });
 
@@ -189,6 +193,22 @@ export default function CreateOrder() {
 
     fetchData();
   }, []);
+
+  // Yeni müşteri eklendikten sonra listeyi yenile
+  const handleCustomerCreated = async (newCustomer: Customer) => {
+    try {
+      const response = await fetch("/api/customers");
+      const result = await response.json();
+
+      console.log("rrrr2", result.data);
+
+      if (result.success) {
+        setCustomers(result.data.filter((c: Customer) => true));
+      }
+    } catch (error) {
+      console.error("Müşteri listesi yenilenirken hata:", error);
+    }
+  };
 
   // Ara toplam hesaplama (Ürünler + İşçilik + Teslimat)
   const calculateSubtotal = () => {
@@ -282,6 +302,7 @@ export default function CreateOrder() {
                 errors={errors}
                 watch={watch}
                 setValue={setValue}
+                onCustomerCreated={handleCustomerCreated}
               />
 
               <OrderItems
