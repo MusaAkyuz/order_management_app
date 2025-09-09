@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -59,23 +59,6 @@ const orderSchema = z.object({
 
 type OrderFormData = z.infer<typeof orderSchema>;
 
-// Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
 export default function CreateOrder() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -91,6 +74,7 @@ export default function CreateOrder() {
     handleSubmit,
     watch,
     setValue,
+    trigger,
     formState: { errors },
   } = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -121,41 +105,6 @@ export default function CreateOrder() {
   });
 
   const watchedItems = watch("orderItems");
-
-  // PDF için debounced değerler (1.5 saniye bekle)
-  const debouncedCustomerId = useDebounce(watch("customerId"), 1500);
-  const debouncedItems = useDebounce(watchedItems, 1500);
-  const debouncedAddress = useDebounce(watch("address"), 1500);
-  const debouncedDescription = useDebounce(watch("description"), 1500);
-  const debouncedLaborCost = useDebounce(watch("laborCost"), 1500);
-  const debouncedDeliveryFee = useDebounce(watch("deliveryFee"), 1500);
-  const debouncedDiscountType = useDebounce(watch("discountType"), 1500);
-  const debouncedDiscountValue = useDebounce(watch("discountValue"), 1500);
-
-  // PDF için debounced data objesi
-  const debouncedPDFData = useMemo(
-    () => ({
-      customer: customers.find((c) => c.id === debouncedCustomerId),
-      orderItems: debouncedItems,
-      address: debouncedAddress,
-      description: debouncedDescription,
-      laborCost: debouncedLaborCost || 0,
-      deliveryFee: debouncedDeliveryFee || 0,
-      discountType: debouncedDiscountType || "percentage",
-      discountValue: debouncedDiscountValue || 0,
-    }),
-    [
-      customers,
-      debouncedCustomerId,
-      debouncedItems,
-      debouncedAddress,
-      debouncedDescription,
-      debouncedLaborCost,
-      debouncedDeliveryFee,
-      debouncedDiscountType,
-      debouncedDiscountValue,
-    ]
-  );
 
   // Müşteri ve ürün listelerini yükle
   useEffect(() => {
@@ -224,6 +173,21 @@ export default function CreateOrder() {
     } catch (error) {
       console.error("Müşteri listesi yenilenirken hata:", error);
     }
+  };
+
+  // PDF için mevcut form verilerini al
+  const getCurrentPDFData = () => {
+    const currentValues = watch();
+    return {
+      customer: customers.find((c) => c.id === currentValues.customerId),
+      orderItems: currentValues.orderItems || [],
+      address: currentValues.address || "",
+      description: currentValues.description || "",
+      laborCost: currentValues.laborCost || 0,
+      deliveryFee: currentValues.deliveryFee || 0,
+      discountType: currentValues.discountType || "percentage",
+      discountValue: currentValues.discountValue || 0,
+    };
   };
 
   // Ürünler toplamını hesapla (KDV hariç)
@@ -318,8 +282,8 @@ export default function CreateOrder() {
   return (
     <Layout currentPage="create-order">
       <div className="min-h-screen bg-gray-50 p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Sol Taraf - Sipariş Formu */}
+        {/* Ana Sipariş Formu - Tek Kolon */}
+        <div className="max-w-4xl mx-auto">
           <div className="bg-white shadow-lg rounded-lg p-6">
             <OrderFormHeader title="Sipariş Bilgileri" />
 
@@ -372,12 +336,45 @@ export default function CreateOrder() {
               />
             </form>
           </div>
-
-          {/* Sağ Taraf - PDF Önizleme ve İşlemleri */}
-          <div className="bg-white shadow-lg rounded-lg p-6 overflow-y-auto">
-            <PDFViewer data={debouncedPDFData} products={products} />
-          </div>
         </div>
+
+        {/* PDF Popup Modal */}
+        {showPDFPreview && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-6xl h-full max-h-[90vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Sipariş Fişi Önizleme
+                </h3>
+                <button
+                  onClick={() => setShowPDFPreview(false)}
+                  className="text-gray-500 hover:text-gray-700 p-1"
+                  type="button"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 p-4 overflow-hidden">
+                <PDFViewer data={getCurrentPDFData()} products={products} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

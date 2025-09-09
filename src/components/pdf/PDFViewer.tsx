@@ -561,28 +561,38 @@ export default function PDFViewer({ data, products }: PDFViewerProps) {
     };
   };
 
-  // PDF'i oluştur ve göster
+  // PDF'i yeniden oluştur
+  const regeneratePDF = async () => {
+    try {
+      const pdfMakeInstance = await loadPdfMake();
+      const docDefinition = generatePDFContent();
+      const pdfDocGenerator = pdfMakeInstance.createPdf(docDefinition);
+
+      pdfDocGenerator.getBlob((blob: Blob) => {
+        // Önceki URL'i temizle
+        if (pdfUrl) {
+          URL.revokeObjectURL(pdfUrl);
+        }
+
+        const url = URL.createObjectURL(blob);
+        setPdfUrl(url);
+      });
+    } catch (error) {
+      console.error("PDF oluşturulurken hata:", error);
+    }
+  };
+
+  // PDF'i oluştur ve göster - component mount olduğunda ve data değiştiğinde
   useEffect(() => {
     const generatePDF = async () => {
       // companyInfo yüklenene kadar bekle
       if (!companyInfo) return;
 
-      try {
-        const pdfMakeInstance = await loadPdfMake();
-        const docDefinition = generatePDFContent();
-        const pdfDocGenerator = pdfMakeInstance.createPdf(docDefinition);
-
-        pdfDocGenerator.getBlob((blob: Blob) => {
-          const url = URL.createObjectURL(blob);
-          setPdfUrl(url);
-        });
-      } catch (error) {
-        console.error("PDF oluşturulurken hata:", error);
-      }
+      regeneratePDF();
     };
 
     generatePDF();
-  }, [data, products, companyInfo, currencySymbol, taxRate]); // Component unmount olduğunda URL'i temizle
+  }, [data, products, companyInfo, currencySymbol, taxRate]); // data değişimini tekrar dinle
   useEffect(() => {
     return () => {
       if (pdfUrl) {

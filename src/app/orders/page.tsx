@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import Layout from "../../components/Layout";
+import PaymentModal from "../../components/order/PaymentModal";
 import {
   getStatusBadgeClasses,
   getStatusStyling,
@@ -15,6 +16,7 @@ interface Order {
   deliveryFee: number;
   createdAt: string;
   customer: {
+    id: number;
     name: string;
     isCompany: boolean;
   };
@@ -41,6 +43,8 @@ interface OrderStatus {
 
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -51,6 +55,8 @@ export default function Orders() {
   );
   const [availableStatuses, setAvailableStatuses] = useState<OrderStatus[]>([]);
   const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [orderToPayment, setOrderToPayment] = useState<Order | null>(null);
 
   useEffect(() => {
     async function fetchOrders() {
@@ -62,13 +68,16 @@ export default function Orders() {
 
         if (data.success && data.data && Array.isArray(data.data.orders)) {
           setOrders(data.data.orders);
+          setFilteredOrders(data.data.orders); // Başlangıçta tüm siparişleri göster
         } else {
           console.error("Siparişler yüklenemedi:", data.error);
           setOrders([]); // Boş array set et
+          setFilteredOrders([]);
         }
       } catch (error) {
         console.error("Siparişler getirilirken hata:", error);
         setOrders([]); // Hata durumunda boş array set et
+        setFilteredOrders([]);
       } finally {
         setLoading(false);
       }
@@ -76,6 +85,42 @@ export default function Orders() {
 
     fetchOrders();
   }, []);
+
+  // Arama fonksiyonu
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredOrders(orders);
+    } else {
+      const filtered = orders.filter((order) => {
+        const searchLower = searchTerm.toLowerCase();
+
+        // Sipariş numarasında ara
+        const orderNumber = order.id.toString();
+        if (orderNumber.includes(searchLower)) return true;
+
+        // Müşteri adında ara
+        if (order.customer?.name?.toLowerCase().includes(searchLower))
+          return true;
+
+        // Sipariş durumunda ara
+        if (order.status?.name?.toLowerCase().includes(searchLower))
+          return true;
+
+        // Ürün adlarında ara
+        const hasMatchingProduct = order.orderItems.some(
+          (item) =>
+            item.product &&
+            item.product.name &&
+            item.product.name.toLowerCase().includes(searchLower)
+        );
+        if (hasMatchingProduct) return true;
+
+        return false;
+      });
+
+      setFilteredOrders(filtered);
+    }
+  }, [searchTerm, orders]);
 
   // Sipariş statülerini yükle
   useEffect(() => {
@@ -196,6 +241,20 @@ export default function Orders() {
       setShowStatusModal(false);
       setOrderToUpdateStatus(null);
     }
+  };
+
+  // Ödeme modal açma fonksiyonu
+  const openPaymentModal = (order: Order) => {
+    setOrderToPayment(order);
+    setShowPaymentModal(true);
+  };
+
+  // Ödeme başarılı callback
+  const handlePaymentSuccess = () => {
+    // Sipariş listesini yeniden yükle veya başka bir güncelleme yap
+    // Bu örnekte sadece modal'ı kapat
+    setShowPaymentModal(false);
+    setOrderToPayment(null);
   };
 
   if (loading) {
@@ -344,6 +403,26 @@ export default function Orders() {
         </div>
       )}
 
+      {/* Payment Modal */}
+      {showPaymentModal && orderToPayment && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setOrderToPayment(null);
+          }}
+          order={{
+            id: orderToPayment.id,
+            customerId: orderToPayment.customer.id,
+            totalPrice: orderToPayment.totalPrice,
+            customer: {
+              name: orderToPayment.customer.name,
+            },
+          }}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
+
       <Layout currentPage="orders">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="mb-6">
@@ -384,19 +463,105 @@ export default function Orders() {
                 Sipariş Oluştur
               </a>
             </div>
+          ) : filteredOrders.length === 0 && searchTerm ? (
+            <div className="text-center py-12 bg-white shadow-lg rounded-lg">
+              <div className="text-gray-400 mb-4">
+                <svg
+                  className="mx-auto h-12 w-12"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Arama sonucu bulunamadı
+              </h3>
+              <p className="text-gray-500 mb-4">
+                "<strong>{searchTerm}</strong>" araması için sonuç bulunamadı.
+              </p>
+              <button
+                onClick={() => setSearchTerm("")}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
+              >
+                Aramayı Temizle
+              </button>
+            </div>
           ) : (
             <div className="bg-white shadow-lg rounded-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                   <h2 className="text-lg font-medium text-gray-900">
-                    Toplam {orders.length} sipariş
+                    {searchTerm
+                      ? `${filteredOrders.length} sipariş bulundu`
+                      : `Toplam ${orders.length} sipariş`}
+                    {searchTerm && (
+                      <span className="text-sm font-normal text-gray-500 ml-2">
+                        "{searchTerm}" için
+                      </span>
+                    )}
                   </h2>
-                  <a
-                    href="/create-order"
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    Yeni Sipariş
-                  </a>
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                    {/* Arama Çubuğu */}
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg
+                          className="h-4 w-4 text-gray-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                          />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Ara..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="block w-64 pl-9 pr-8 py-2 border border-gray-300 rounded-md text-sm leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {searchTerm && (
+                        <button
+                          onClick={() => setSearchTerm("")}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        >
+                          <svg
+                            className="h-4 w-4 text-gray-400 hover:text-gray-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    <a
+                      href="/create-order"
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      Yeni Sipariş
+                    </a>
+                  </div>
                 </div>
               </div>
 
@@ -424,7 +589,7 @@ export default function Orders() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {orders.map((order) => (
+                  {filteredOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         #{order.id}
@@ -461,6 +626,12 @@ export default function Orders() {
                         >
                           Düzenle
                         </a>
+                        <button
+                          onClick={() => openPaymentModal(order)}
+                          className="text-purple-600 hover:text-purple-900 mr-3"
+                        >
+                          Ödeme Yap
+                        </button>
                         <button
                           onClick={() => openStatusModal(order)}
                           className="text-yellow-600 hover:text-yellow-900 mr-3"

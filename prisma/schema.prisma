@@ -23,6 +23,7 @@ model Customer {
   updatedAt     DateTime @updatedAt
   
   orders        Order[]
+  payments      Payment[]
   transactions  Transaction[]
   
   @@map("customers")
@@ -90,9 +91,28 @@ model Order {
   status        OrderStatus @relation(fields: [statusId], references: [id])
   
   orderItems    OrderItem[]
+  payments      Payment[]
   transactions  Transaction[]
   
   @@map("orders")
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  amount        Float    // Ödenen tutar
+  paymentDate   DateTime @default(now()) // Ödeme tarihi
+  description   String?  // Ödeme açıklaması/notları
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  orderId       Int
+  order         Order    @relation(fields: [orderId], references: [id])
+  
+  customerId    Int
+  customer      Customer @relation(fields: [customerId], references: [id])
+  
+  @@map("payments")
 }
 
 model Transaction {

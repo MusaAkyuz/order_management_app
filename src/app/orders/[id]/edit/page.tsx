@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,7 +13,6 @@ import OrderItems from "../../../../components/order/OrderItems";
 import AdditionalCosts from "../../../../components/order/AdditionalCosts";
 import OrderSummary from "../../../../components/order/OrderSummary";
 import LoadingSpinner from "../../../../components/order/LoadingSpinner";
-import PDFViewer from "../../../../components/pdf/PDFViewer";
 import { Customer, Product } from "../../../../types/api";
 
 // Zod şeması
@@ -59,23 +58,6 @@ const orderSchema = z.object({
 
 type OrderFormData = z.infer<typeof orderSchema>;
 
-// Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
 export default function EditOrder() {
   const router = useRouter();
   const params = useParams();
@@ -86,7 +68,6 @@ export default function EditOrder() {
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [taxRate, setTaxRate] = useState(18); // KDV oranı
-  const [showPDFPreview, setShowPDFPreview] = useState(false);
 
   const {
     register,
@@ -125,41 +106,6 @@ export default function EditOrder() {
   });
 
   const watchedItems = watch("orderItems");
-
-  // PDF için debounced değerler (1.5 saniye bekle)
-  const debouncedCustomerId = useDebounce(watch("customerId"), 1500);
-  const debouncedItems = useDebounce(watchedItems, 1500);
-  const debouncedAddress = useDebounce(watch("address"), 1500);
-  const debouncedDescription = useDebounce(watch("description"), 1500);
-  const debouncedLaborCost = useDebounce(watch("laborCost"), 1500);
-  const debouncedDeliveryFee = useDebounce(watch("deliveryFee"), 1500);
-  const debouncedDiscountType = useDebounce(watch("discountType"), 1500);
-  const debouncedDiscountValue = useDebounce(watch("discountValue"), 1500);
-
-  // PDF için debounced data objesi
-  const debouncedPDFData = useMemo(
-    () => ({
-      customer: customers.find((c) => c.id === debouncedCustomerId),
-      orderItems: debouncedItems,
-      address: debouncedAddress,
-      description: debouncedDescription,
-      laborCost: debouncedLaborCost || 0,
-      deliveryFee: debouncedDeliveryFee || 0,
-      discountType: debouncedDiscountType || "percentage",
-      discountValue: debouncedDiscountValue || 0,
-    }),
-    [
-      customers,
-      debouncedCustomerId,
-      debouncedItems,
-      debouncedAddress,
-      debouncedDescription,
-      debouncedLaborCost,
-      debouncedDeliveryFee,
-      debouncedDiscountType,
-      debouncedDiscountValue,
-    ]
-  );
 
   // Mevcut siparişi yükle
   useEffect(() => {
@@ -366,8 +312,8 @@ export default function EditOrder() {
   return (
     <Layout currentPage="orders">
       <div className="min-h-screen bg-gray-50 p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Sol Taraf - Sipariş Formu */}
+        {/* Ana Sipariş Düzenleme Formu - Tek Kolon */}
+        <div className="max-w-4xl mx-auto">
           <div className="bg-white shadow-lg rounded-lg p-6">
             <OrderFormHeader title="Sipariş Düzenle" />
 
@@ -416,15 +362,9 @@ export default function EditOrder() {
                 discountType={watch("discountType")}
                 discountValue={watch("discountValue")}
                 submitLoading={submitLoading}
-                onShowPDFPreview={() => setShowPDFPreview(true)}
                 isEditMode={true}
               />
             </form>
-          </div>
-
-          {/* Sağ Taraf - PDF Önizleme ve İşlemleri */}
-          <div className="bg-white shadow-lg rounded-lg p-6 overflow-y-auto">
-            <PDFViewer data={debouncedPDFData} products={products} />
           </div>
         </div>
       </div>
