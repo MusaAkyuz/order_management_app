@@ -15,15 +15,26 @@ export async function GET(req: NextRequest) {
     const orderId = searchParams.get("orderId");
     const customerId = searchParams.get("customerId");
 
+    console.log(
+      "Payment API GET - orderId:",
+      orderId,
+      "customerId:",
+      customerId
+    );
+
     const where: any = {};
-    if (orderId) where.orderId = orderId;
-    if (customerId) where.customerId = customerId;
+    if (orderId) where.orderId = parseInt(orderId);
+    if (customerId) where.customerId = parseInt(customerId);
+
+    console.log("Payment API - where condition:", where);
 
     const payments = await prisma.payment.findMany({
       where,
       orderBy: { paymentDate: "desc" },
       include: { order: true, customer: true },
     });
+
+    console.log("Payment API - found payments:", payments.length);
 
     return NextResponse.json({ success: true, data: payments });
   } catch (error) {

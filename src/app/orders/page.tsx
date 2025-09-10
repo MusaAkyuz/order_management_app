@@ -12,6 +12,8 @@ import {
 interface Order {
   id: number;
   totalPrice: number;
+  totalPaid: number;
+  remainingPayment: number;
   laborCost: number;
   deliveryFee: number;
   createdAt: string;
@@ -250,9 +252,21 @@ export default function Orders() {
   };
 
   // Ödeme başarılı callback
-  const handlePaymentSuccess = () => {
-    // Sipariş listesini yeniden yükle veya başka bir güncelleme yap
-    // Bu örnekte sadece modal'ı kapat
+  const handlePaymentSuccess = async () => {
+    // Sipariş listesini yeniden yükle
+    try {
+      const response = await fetch("/api/orders");
+      const data = await response.json();
+
+      if (data.success && data.data && Array.isArray(data.data.orders)) {
+        setOrders(data.data.orders);
+        setFilteredOrders(data.data.orders);
+      }
+    } catch (error) {
+      console.error("Siparişler güncellenirken hata:", error);
+    }
+
+    // Modal'ı kapat
     setShowPaymentModal(false);
     setOrderToPayment(null);
   };
@@ -415,6 +429,8 @@ export default function Orders() {
             id: orderToPayment.id,
             customerId: orderToPayment.customer.id,
             totalPrice: orderToPayment.totalPrice,
+            totalPaid: orderToPayment.totalPaid,
+            remainingPayment: orderToPayment.remainingPayment,
             customer: {
               name: orderToPayment.customer.name,
             },
@@ -581,6 +597,9 @@ export default function Orders() {
                       Toplam Tutar
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Kalan Ödeme
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tarih
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -610,6 +629,17 @@ export default function Orders() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ₺{order.totalPrice.toFixed(2)}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span
+                          className={`font-medium ${
+                            order.remainingPayment > 0
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }`}
+                        >
+                          ₺{order.remainingPayment?.toFixed(2) || "0.00"}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(order.createdAt).toLocaleDateString("tr-TR")}
                       </td>
@@ -630,7 +660,7 @@ export default function Orders() {
                           onClick={() => openPaymentModal(order)}
                           className="text-purple-600 hover:text-purple-900 mr-3"
                         >
-                          Ödeme Yap
+                          Ödeme İşlemleri
                         </button>
                         <button
                           onClick={() => openStatusModal(order)}

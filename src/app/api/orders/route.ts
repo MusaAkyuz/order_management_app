@@ -195,6 +195,11 @@ export async function GET(request: NextRequest) {
             },
             where: { isActive: true },
           },
+          payments: {
+            select: {
+              amount: true,
+            },
+          },
         },
         orderBy: {
           createdAt: "desc",
@@ -205,10 +210,25 @@ export async function GET(request: NextRequest) {
       prisma.order.count({ where }),
     ]);
 
+    // Kalan ödeme miktarını hesapla
+    const ordersWithRemainingPayment = orders.map((order) => {
+      const totalPaid = order.payments.reduce(
+        (sum, payment) => sum + payment.amount,
+        0
+      );
+      const remainingPayment = order.totalPrice - totalPaid;
+
+      return {
+        ...order,
+        totalPaid,
+        remainingPayment: Math.max(0, remainingPayment), // Negatif değerleri 0 yap
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        orders,
+        orders: ordersWithRemainingPayment,
         pagination: {
           current: page,
           total: Math.ceil(total / limit),
