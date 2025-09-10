@@ -12,6 +12,7 @@ export default function Home() {
     orders: false,
     customers: false,
     debts: false,
+    expenses: false,
   });
   const router = useRouter();
 
@@ -70,6 +71,15 @@ export default function Home() {
       iconColor: "text-red-500",
       spinnerColor: "border-red-500",
     },
+    {
+      key: "expenses" as keyof typeof loadingStates,
+      path: "/expenses",
+      title: "Şirket Giderleri",
+      description: "Şirket masraflarını tarih bazlı kaydedin ve yönetin.",
+      icon: "📊",
+      iconColor: "text-orange-500",
+      spinnerColor: "border-orange-500",
+    },
   ];
 
   return (
@@ -82,7 +92,7 @@ export default function Home() {
           Siparişlerinizi kolayca oluşturun, ürün envanterinizi yönetin ve tüm
           işlemlerinizi tek bir yerden takip edin.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 w-full max-w-7xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 w-full max-w-7xl">
           {features.map((feature) => (
             <FeatureCard
               key={feature.key}

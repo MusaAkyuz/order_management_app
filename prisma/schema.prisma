@@ -167,3 +167,33 @@ model LookupTable {
   @@unique([category, key])
   @@map("lookup_table")
 }
+
+model ExpenseType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // Gider tipi adı: "Kira", "Elektrik", "Su", "Telefon", "Yakıt", vs.
+  description String?  // Gider tipi açıklaması
+  color       String?  // Renk kodu (görsel ayrım için)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  expenses    Expense[]
+  
+  @@map("expense_types")
+}
+
+model Expense {
+  id            Int         @id @default(autoincrement())
+  amount        Float       // Gider tutarı
+  expenseDate   DateTime    // Gider tarihi
+  description   String?     // Gider açıklaması/detayları
+  receiptNumber String?     // Fiş/fatura numarası
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  expenseTypeId Int
+  expenseType   ExpenseType @relation(fields: [expenseTypeId], references: [id])
+  
+  @@map("expenses")
+}

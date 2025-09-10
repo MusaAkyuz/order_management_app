@@ -9,7 +9,8 @@ interface NavigationProps {
     | "orders"
     | "products"
     | "customers"
-    | "debts";
+    | "debts"
+    | "expenses";
 }
 
 export default function Navigation({ currentPage = "home" }: NavigationProps) {
@@ -56,6 +57,12 @@ export default function Navigation({ currentPage = "home" }: NavigationProps) {
       path: "/debts",
       icon: "💰",
     },
+    expenses: {
+      title: "Şirket Giderleri",
+      description: "Şirket masraflarını tarih bazlı kaydedin ve yönetin",
+      path: "/expenses",
+      icon: "📊",
+    },
   };
 
   const getBreadcrumbPath = () => {
@@ -94,6 +101,9 @@ export default function Navigation({ currentPage = "home" }: NavigationProps) {
           </a>
           <a href="/debts" className={getLinkClass("debts")}>
             Müşteri Borçları
+          </a>
+          <a href="/expenses" className={getLinkClass("expenses")}>
+            Şirket Giderleri
           </a>
         </div>
       </div>

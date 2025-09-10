@@ -232,6 +232,69 @@ async function main() {
     });
   }
 
+  // Expense Types seed data
+  const expenseTypes = [
+    {
+      name: "Kira",
+      description: "Ofis/dükkan kira giderleri",
+      color: "#FF6B6B", // Kırmızı
+    },
+    {
+      name: "Elektrik",
+      description: "Elektrik fatura giderleri",
+      color: "#4ECDC4", // Turkuaz
+    },
+    {
+      name: "Su",
+      description: "Su fatura giderleri",
+      color: "#45B7D1", // Mavi
+    },
+    {
+      name: "Telefon/İnternet",
+      description: "Telefon ve internet fatura giderleri",
+      color: "#96CEB4", // Yeşil
+    },
+    {
+      name: "Yakıt",
+      description: "Araç yakıt giderleri",
+      color: "#FFEAA7", // Sarı
+    },
+    {
+      name: "Kırtasiye",
+      description: "Ofis malzemeleri ve kırtasiye giderleri",
+      color: "#DDA0DD", // Mor
+    },
+    {
+      name: "Yemek",
+      description: "Personel yemek giderleri",
+      color: "#98D8C8", // Açık yeşil
+    },
+    {
+      name: "Ulaşım",
+      description: "Toplu taşıma ve ulaşım giderleri",
+      color: "#F7DC6F", // Açık sarı
+    },
+    {
+      name: "Bakım-Onarım",
+      description: "Makine, araç ve donanım bakım giderleri",
+      color: "#BB8FCE", // Açık mor
+    },
+    {
+      name: "Diğer",
+      description: "Diğer çeşitli giderler",
+      color: "#AED6F1", // Açık mavi
+    },
+  ];
+
+  console.log("Gider Tipleri ekleniyor...");
+  for (const expenseType of expenseTypes) {
+    await prisma.expenseType.upsert({
+      where: { name: expenseType.name },
+      update: {},
+      create: expenseType,
+    });
+  }
+
   console.log("Seed veriler başarıyla eklendi!");
 }
 

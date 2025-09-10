@@ -4,7 +4,14 @@ import { Toaster } from "react-hot-toast";
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentPage?: "home" | "create-order" | "orders" | "products" | "customers";
+  currentPage?:
+    | "home"
+    | "create-order"
+    | "orders"
+    | "products"
+    | "customers"
+    | "debts"
+    | "expenses";
 }
 
 export default function Layout({ children, currentPage }: LayoutProps) {
