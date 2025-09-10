@@ -235,49 +235,34 @@ async function main() {
   // Expense Types seed data
   const expenseTypes = [
     {
-      name: "Kira",
-      description: "Ofis/dükkan kira giderleri",
+      name: "Mazot/Benzin",
+      description: "Yakıt giderleri",
       color: "#FF6B6B", // Kırmızı
     },
     {
-      name: "Elektrik",
-      description: "Elektrik fatura giderleri",
+      name: "İşçi maaşları",
+      description: "Personel maaş giderleri",
       color: "#4ECDC4", // Turkuaz
     },
     {
-      name: "Su",
-      description: "Su fatura giderleri",
+      name: "Yeni malzeme tedariği",
+      description: "Malzeme ve hammadde giderleri",
       color: "#45B7D1", // Mavi
     },
     {
-      name: "Telefon/İnternet",
-      description: "Telefon ve internet fatura giderleri",
+      name: "Tedarik ulaştırma ücreti",
+      description: "Nakliye ve ulaştırma giderleri",
       color: "#96CEB4", // Yeşil
     },
     {
-      name: "Yakıt",
-      description: "Araç yakıt giderleri",
+      name: "Dükkan masrafları",
+      description: "Dükkan işletme giderleri",
       color: "#FFEAA7", // Sarı
     },
     {
-      name: "Kırtasiye",
-      description: "Ofis malzemeleri ve kırtasiye giderleri",
+      name: "Bakım",
+      description: "Bakım ve onarım giderleri",
       color: "#DDA0DD", // Mor
-    },
-    {
-      name: "Yemek",
-      description: "Personel yemek giderleri",
-      color: "#98D8C8", // Açık yeşil
-    },
-    {
-      name: "Ulaşım",
-      description: "Toplu taşıma ve ulaşım giderleri",
-      color: "#F7DC6F", // Açık sarı
-    },
-    {
-      name: "Bakım-Onarım",
-      description: "Makine, araç ve donanım bakım giderleri",
-      color: "#BB8FCE", // Açık mor
     },
     {
       name: "Diğer",
@@ -287,13 +272,18 @@ async function main() {
   ];
 
   console.log("Gider Tipleri ekleniyor...");
+
+  // Önce mevcut gider tiplerini sil
+  await prisma.expenseType.deleteMany({});
+  console.log("Mevcut gider tipleri silindi.");
+
+  // Yeni gider tiplerini ekle
   for (const expenseType of expenseTypes) {
-    await prisma.expenseType.upsert({
-      where: { name: expenseType.name },
-      update: {},
-      create: expenseType,
+    await prisma.expenseType.create({
+      data: expenseType,
     });
   }
+  console.log("Yeni gider tipleri eklendi.");
 
   console.log("Seed veriler başarıyla eklendi!");
 }
