@@ -3,7 +3,13 @@
 import { useState } from "react";
 
 interface NavigationProps {
-  currentPage?: "home" | "create-order" | "orders" | "products" | "customers";
+  currentPage?:
+    | "home"
+    | "create-order"
+    | "orders"
+    | "products"
+    | "customers"
+    | "debts";
 }
 
 export default function Navigation({ currentPage = "home" }: NavigationProps) {
@@ -43,6 +49,13 @@ export default function Navigation({ currentPage = "home" }: NavigationProps) {
       path: "/customers",
       icon: "👥",
     },
+    debts: {
+      title: "Müşteri Borçları",
+      description:
+        "Müşterilerin toplam borç durumlarını görüntüleyin ve takip edin",
+      path: "/debts",
+      icon: "💰",
+    },
   };
 
   const getBreadcrumbPath = () => {
@@ -78,6 +91,9 @@ export default function Navigation({ currentPage = "home" }: NavigationProps) {
           </a>
           <a href="/customers" className={getLinkClass("customers")}>
             Müşteriler
+          </a>
+          <a href="/debts" className={getLinkClass("debts")}>
+            Müşteri Borçları
           </a>
         </div>
       </div>

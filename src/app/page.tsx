@@ -11,6 +11,7 @@ export default function Home() {
     products: false,
     orders: false,
     customers: false,
+    debts: false,
   });
   const router = useRouter();
 
@@ -59,6 +60,16 @@ export default function Home() {
       iconColor: "text-purple-500",
       spinnerColor: "border-purple-500",
     },
+    {
+      key: "debts" as keyof typeof loadingStates,
+      path: "/debts",
+      title: "Müşteri Borçları",
+      description:
+        "Müşterilerin toplam borç durumlarını görüntüleyin ve takip edin.",
+      icon: "💰",
+      iconColor: "text-red-500",
+      spinnerColor: "border-red-500",
+    },
   ];
 
   return (
@@ -71,7 +82,7 @@ export default function Home() {
           Siparişlerinizi kolayca oluşturun, ürün envanterinizi yönetin ve tüm
           işlemlerinizi tek bir yerden takip edin.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-7xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 w-full max-w-7xl">
           {features.map((feature) => (
             <FeatureCard
               key={feature.key}
