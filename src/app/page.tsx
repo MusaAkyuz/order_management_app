@@ -13,6 +13,7 @@ export default function Home() {
     customers: false,
     debts: false,
     expenses: false,
+    reports: false,
   });
   const router = useRouter();
 
@@ -80,6 +81,15 @@ export default function Home() {
       iconColor: "text-orange-500",
       spinnerColor: "border-orange-500",
     },
+    {
+      key: "reports" as keyof typeof loadingStates,
+      path: "/reports",
+      title: "Gelir-Gider Raporları",
+      description: "Şirketin finansal durumunu ay ay ve yıl yıl analiz edin.",
+      icon: "📈",
+      iconColor: "text-indigo-500",
+      spinnerColor: "border-indigo-500",
+    },
   ];
 
   return (
@@ -92,7 +102,7 @@ export default function Home() {
           Siparişlerinizi kolayca oluşturun, ürün envanterinizi yönetin ve tüm
           işlemlerinizi tek bir yerden takip edin.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 w-full max-w-7xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-6 w-full max-w-7xl">
           {features.map((feature) => (
             <FeatureCard
               key={feature.key}

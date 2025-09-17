@@ -11,7 +11,8 @@ interface LayoutProps {
     | "products"
     | "customers"
     | "debts"
-    | "expenses";
+    | "expenses"
+    | "reports";
 }
 
 export default function Layout({ children, currentPage }: LayoutProps) {

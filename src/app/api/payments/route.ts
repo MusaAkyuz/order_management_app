@@ -57,15 +57,82 @@ export async function POST(req: NextRequest) {
       );
     }
     const { orderId, customerId, paymentDate, amount } = parse.data;
-    const payment = await prisma.payment.create({
-      data: {
-        orderId: parseInt(orderId),
-        customerId: parseInt(customerId),
-        paymentDate: new Date(paymentDate),
-        amount,
-      },
+
+    // Transaction ile ödeme ve durum güncellemesi
+    const result = await prisma.$transaction(async (tx) => {
+      // Ödemeyi oluştur
+      const payment = await tx.payment.create({
+        data: {
+          orderId: parseInt(orderId),
+          customerId: parseInt(customerId),
+          paymentDate: new Date(paymentDate),
+          amount,
+        },
+      });
+
+      // Siparişin toplam tutarını ve mevcut ödemeleri al
+      const order = await tx.order.findUnique({
+        where: { id: parseInt(orderId) },
+        include: {
+          payments: {
+            where: { isActive: true },
+          },
+        },
+      });
+
+      if (!order) {
+        throw new Error("Sipariş bulunamadı");
+      }
+
+      // Toplam ödenen tutarı hesapla (yeni ödeme dahil)
+      const totalPaid =
+        order.payments.reduce((sum, p) => sum + p.amount, 0) + amount;
+
+      // Eğer toplam tutar ödenmiş ise durumu "Ücreti Ödendi" (ID: 4) yap
+      if (totalPaid >= order.totalPrice) {
+        await tx.order.update({
+          where: { id: parseInt(orderId) },
+          data: { statusId: 4 }, // "Ücreti Ödendi" status ID
+        });
+
+        // Transaction log ekle
+        await tx.transaction.create({
+          data: {
+            action: "ORDER_PAYMENT_COMPLETED",
+            description: `Sipariş ödemesi tamamlandı (ID: ${orderId})`,
+            details: JSON.stringify({
+              orderId: parseInt(orderId),
+              totalPrice: order.totalPrice,
+              totalPaid: totalPaid,
+              paymentAmount: amount,
+            }),
+            customerId: parseInt(customerId),
+            orderId: parseInt(orderId),
+          },
+        });
+      } else {
+        // Kısmi ödeme log'u
+        await tx.transaction.create({
+          data: {
+            action: "ORDER_PARTIAL_PAYMENT",
+            description: `Kısmi ödeme yapıldı (ID: ${orderId})`,
+            details: JSON.stringify({
+              orderId: parseInt(orderId),
+              totalPrice: order.totalPrice,
+              totalPaid: totalPaid,
+              paymentAmount: amount,
+              remainingAmount: order.totalPrice - totalPaid,
+            }),
+            customerId: parseInt(customerId),
+            orderId: parseInt(orderId),
+          },
+        });
+      }
+
+      return payment;
     });
-    return NextResponse.json({ success: true, data: payment });
+
+    return NextResponse.json({ success: true, data: result });
   } catch (error) {
     console.error("Payment POST error:", error);
     return NextResponse.json(
