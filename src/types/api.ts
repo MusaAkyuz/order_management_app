@@ -96,3 +96,16 @@ export interface ApiResponse<T> {
   error?: string;
   message?: string;
 }
+
+// Sayfalama meta bilgisi (liste endpoint'lerinde ortak kullanılır)
+export interface PaginationMeta {
+  current: number;
+  total: number;
+  count: number;
+  limit: number;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  pagination: PaginationMeta;
+}

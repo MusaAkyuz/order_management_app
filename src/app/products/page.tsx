@@ -1,12 +1,15 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Layout from "../../components/Layout";
 import ProductPageHeader from "../../components/product/ProductPageHeader";
 import ProductTable from "../../components/product/ProductTable";
 import ProductFormModal from "../../components/product/ProductFormModal";
 import StockEditModal from "../../components/product/StockEditModal";
+import BulkPriceUpdateModal from "../../components/product/BulkPriceUpdateModal";
 import LoadingSpinner from "../../components/product/LoadingSpinner";
+import Pagination from "../../components/Pagination";
 import toast from "react-hot-toast";
+import type { PaginationMeta } from "@/types/api";
 
 interface Product {
   id: number;
@@ -43,16 +46,31 @@ interface ProductFormData {
 
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [isBulkPriceModalOpen, setIsBulkPriceModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingStockProduct, setEditingStockProduct] =
     useState<Product | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
 
-  // Stok uyarıları için helper fonksiyon
+  // Arama girdisini debounce et
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Stok uyarıları için helper fonksiyon (mevcut sayfadaki ürünler için)
   const getLowStockProducts = () => {
     return products.filter(
       (product) =>
@@ -65,21 +83,30 @@ export default function Products() {
   const lowStockCount = getLowStockProducts().length;
 
   // Ürünleri yükle
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const response = await fetch("/api/products");
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(limit));
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (typeFilter) params.set("typeId", typeFilter);
+
+      const response = await fetch(`/api/products?${params.toString()}`);
       const data = await response.json();
 
-      if (data.success) {
-        setProducts(data.data);
+      if (data.success && data.data) {
+        setProducts(data.data.products ?? []);
+        setPagination(data.data.pagination ?? null);
       } else {
         toast.error("Ürünler yüklenirken hata oluştu");
       }
     } catch (error) {
       console.error("Fetch products error:", error);
       toast.error("Ürünler yüklenirken hata oluştu");
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [page, limit, debouncedSearch, typeFilter]);
 
   // Ürün tiplerini yükle
   const fetchProductTypes = async () => {
@@ -98,16 +125,15 @@ export default function Products() {
     }
   };
 
-  // Sayfa yüklendiğinde verileri çek
+  // Ürün tiplerini bir kez yükle
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      await Promise.all([fetchProducts(), fetchProductTypes()]);
-      setIsLoading(false);
-    };
-
-    loadData();
+    fetchProductTypes();
   }, []);
+
+  // Ürünleri sayfa/limit/arama/tip filtresi değiştikçe yeniden çek
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   // Yeni ürün ekleme
   const handleAddProduct = () => {
@@ -242,10 +268,10 @@ export default function Products() {
     }
   };
 
-  // İstatistikler
+  // İstatistikler (mevcut sayfadaki ürünler için)
   const activeProducts = products.filter((p) => p.isActive).length;
 
-  if (isLoading) {
+  if (isLoading && !pagination) {
     return (
       <Layout currentPage="products">
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -260,12 +286,34 @@ export default function Products() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <ProductPageHeader
           onAddProduct={handleAddProduct}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          totalProducts={products.length}
+          onBulkPriceUpdate={() => setIsBulkPriceModalOpen(true)}
+          searchTerm={searchInput}
+          onSearchChange={setSearchInput}
+          totalProducts={pagination?.count ?? products.length}
           activeProducts={activeProducts}
           lowStockCount={lowStockCount}
         />
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Ürün Tipi
+          </label>
+          <select
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setPage(1);
+            }}
+            className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Tüm tipler</option>
+            {productTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <ProductTable
           products={products}
@@ -274,8 +322,21 @@ export default function Products() {
           onEditStock={handleEditStock}
           onDelete={handleDeleteProduct}
           onBulkDelete={handleBulkDeleteProducts}
-          searchTerm={searchTerm}
+          searchTerm={debouncedSearch}
         />
+
+        {pagination && (
+          <div className="bg-white shadow-sm rounded-lg border border-gray-200 mt-4">
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              onLimitChange={(newLimit) => {
+                setLimit(newLimit);
+                setPage(1);
+              }}
+            />
+          </div>
+        )}
 
         <ProductFormModal
           isOpen={isModalOpen}
@@ -296,6 +357,12 @@ export default function Products() {
           }}
           onSave={handleSaveStock}
           product={editingStockProduct}
+        />
+
+        <BulkPriceUpdateModal
+          isOpen={isBulkPriceModalOpen}
+          onClose={() => setIsBulkPriceModalOpen(false)}
+          onSaved={fetchProducts}
         />
       </div>
     </Layout>

@@ -6,7 +6,9 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import Layout from "../../components/Layout";
+import Pagination from "../../components/Pagination";
 import { formatCurrency } from "../../utils/currency";
+import type { PaginationMeta } from "@/types/api";
 
 const expenseSchema = z.object({
   expenseTypeId: z.number().min(1, "Gider tipi seçilmelidir"),
@@ -47,6 +49,9 @@ interface ExpenseStats {
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [expenseTypes, setExpenseTypes] = useState<ExpenseType[]>([]);
   const [stats, setStats] = useState<ExpenseStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,12 +75,11 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     fetchExpenseTypes();
-    fetchExpenses();
   }, []);
 
   useEffect(() => {
     fetchExpenses();
-  }, [startDate, endDate, selectedExpenseType]);
+  }, [page, limit, startDate, endDate, selectedExpenseType]);
 
   const fetchExpenseTypes = async () => {
     try {
@@ -98,17 +102,19 @@ export default function ExpensesPage() {
       setLoading(true);
 
       const params = new URLSearchParams();
+      params.append("page", String(page));
+      params.append("limit", String(limit));
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
       if (selectedExpenseType)
         params.append("expenseTypeId", selectedExpenseType);
-      params.append("limit", "50"); // Daha fazla kayıt göster
 
       const response = await fetch(`/api/expenses?${params.toString()}`);
       const data = await response.json();
 
       if (data.success) {
         setExpenses(data.data.expenses);
+        setPagination(data.data.pagination);
         setStats(data.data.stats);
       } else {
         toast.error("Giderler yüklenemedi");
@@ -164,6 +170,7 @@ export default function ExpensesPage() {
     setStartDate("");
     setEndDate("");
     setSelectedExpenseType("");
+    setPage(1);
   };
 
   const handleModalClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -380,7 +387,10 @@ export default function ExpensesPage() {
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -391,7 +401,10 @@ export default function ExpensesPage() {
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -401,7 +414,10 @@ export default function ExpensesPage() {
               </label>
               <select
                 value={selectedExpenseType}
-                onChange={(e) => setSelectedExpenseType(e.target.value)}
+                onChange={(e) => {
+                  setSelectedExpenseType(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">Tüm tipler</option>
@@ -490,6 +506,17 @@ export default function ExpensesPage() {
               </tbody>
             </table>
           </div>
+
+          {pagination && (
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              onLimitChange={(newLimit) => {
+                setLimit(newLimit);
+                setPage(1);
+              }}
+            />
+          )}
         </div>
       </div>
     </Layout>

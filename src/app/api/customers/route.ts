@@ -18,31 +18,91 @@ const customerSchema = z.object({
 });
 
 // GET - Müşteri Listesi
-export async function GET() {
+// Not: "page" veya "limit" parametresi gönderilmezse tüm liste (eski davranış,
+// dropdown/seçim kutuları için) döner. Bu parametrelerden biri gönderilirse
+// sayfalanmış { customers, pagination } şeklinde yanıt döner.
+export async function GET(request: NextRequest) {
   try {
-    const customers = await prisma.customer.findMany({
-      where: {
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        address: true,
-        taxNumber: true,
-        isCompany: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: {
-        name: "asc",
-      },
-    });
+    const { searchParams } = new URL(request.url);
+    const hasPagination = searchParams.has("page") || searchParams.has("limit");
+    const search = searchParams.get("search");
+    const isCompanyParam = searchParams.get("isCompany");
+
+    const where: any = {
+      isActive: true,
+    };
+
+    if (isCompanyParam !== null) {
+      where.isCompany = isCompanyParam === "true";
+    }
+
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      where.OR = [
+        { name: { contains: searchTerm } },
+        { email: { contains: searchTerm } },
+        { phone: { contains: searchTerm } },
+        { address: { contains: searchTerm } },
+        { taxNumber: { contains: searchTerm } },
+      ];
+    }
+
+    const select = {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      taxNumber: true,
+      isCompany: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+    };
+
+    if (!hasPagination) {
+      const customers = await prisma.customer.findMany({
+        where,
+        select,
+        orderBy: {
+          name: "asc",
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: customers,
+      });
+    }
+
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    const [customers, total] = await Promise.all([
+      prisma.customer.findMany({
+        where,
+        select,
+        orderBy: {
+          name: "asc",
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.customer.count({ where }),
+    ]);
 
     return NextResponse.json({
       success: true,
-      data: customers,
+      data: {
+        customers,
+        pagination: {
+          current: page,
+          total: Math.ceil(total / limit),
+          count: total,
+          limit,
+        },
+      },
     });
   } catch (error) {
     console.error("Müşteriler getirilirken hata:", error);

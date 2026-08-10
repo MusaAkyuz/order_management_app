@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { Product } from "@/types/api";
@@ -14,28 +14,88 @@ const productSchema = z.object({
 });
 
 // GET - Ürün Listesi (Tüm ürünler - aktif/pasif dahil)
-export async function GET(): Promise<
-  NextResponse<{ success: boolean; data?: Product[]; error?: string }>
-> {
+// Not: "page" veya "limit" parametresi gönderilmezse tüm liste (eski davranış,
+// dropdown/seçim kutuları için) döner. Bu parametrelerden biri gönderilirse
+// sayfalanmış { products, pagination } şeklinde yanıt döner.
+export async function GET(request: NextRequest) {
   try {
-    const products = await prisma.product.findMany({
-      include: {
-        type: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-          },
+    const { searchParams } = new URL(request.url);
+    const hasPagination = searchParams.has("page") || searchParams.has("limit");
+    const search = searchParams.get("search");
+    const typeId = searchParams.get("typeId");
+    const isActiveParam = searchParams.get("isActive");
+
+    const where: any = {};
+
+    if (typeId) {
+      where.typeId = parseInt(typeId);
+    }
+
+    if (isActiveParam !== null) {
+      where.isActive = isActiveParam === "true";
+    }
+
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      where.OR = [
+        { name: { contains: searchTerm } },
+        { description: { contains: searchTerm } },
+      ];
+    }
+
+    const include = {
+      type: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    };
+
+    if (!hasPagination) {
+      const products = await prisma.product.findMany({
+        where,
+        include,
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: products,
+      });
+    }
+
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include,
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.product.count({ where }),
+    ]);
 
     return NextResponse.json({
       success: true,
-      data: products,
+      data: {
+        products,
+        pagination: {
+          current: page,
+          total: Math.ceil(total / limit),
+          count: total,
+          limit,
+        },
+      },
     });
   } catch (error) {
     console.error("Ürünler getirilirken hata:", error);
@@ -140,6 +200,95 @@ export async function POST(request: Request) {
   }
 }
 
+// PATCH - Toplu Fiyat Güncelleme
+const bulkPriceUpdateSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        id: z.number(),
+        currentPrice: z.number().min(0, "Fiyat negatif olamaz"),
+      })
+    )
+    .min(1, "Güncellenecek ürün bulunamadı"),
+});
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { updates } = bulkPriceUpdateSchema.parse(body);
+
+    const ids = updates.map((u) => u.id);
+    const existingProducts = await prisma.product.findMany({
+      where: { id: { in: ids }, isActive: true },
+    });
+
+    if (existingProducts.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Güncellenecek aktif ürün bulunamadı" },
+        { status: 404 }
+      );
+    }
+
+    const existingIds = new Set(existingProducts.map((p) => p.id));
+    const validUpdates = updates.filter((u) => existingIds.has(u.id));
+
+    const updatedProducts = await prisma.$transaction(
+      validUpdates.map((update) =>
+        prisma.product.update({
+          where: { id: update.id },
+          data: {
+            currentPrice: update.currentPrice,
+            updatedAt: new Date(),
+          },
+        })
+      )
+    );
+
+    await Promise.all(
+      updatedProducts.map((updated) => {
+        const original = existingProducts.find((p) => p.id === updated.id);
+        return prisma.transaction.create({
+          data: {
+            action: "UPDATE",
+            description: `Toplu fiyat güncelleme: ${updated.name}`,
+            details: JSON.stringify({
+              productId: updated.id,
+              productName: updated.name,
+              oldPrice: original?.currentPrice,
+              newPrice: updated.currentPrice,
+              batchOperation: true,
+            }),
+            productId: updated.id,
+          },
+        });
+      })
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: `${updatedProducts.length} ürünün fiyatı güncellendi`,
+      data: {
+        updatedCount: updatedProducts.length,
+        requestedCount: updates.length,
+      },
+    });
+  } catch (error) {
+    console.error("Toplu fiyat güncellenirken hata:", error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: error.issues[0].message },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Fiyatlar güncellenemedi" },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE - Toplu Ürün Silme (Soft Delete)
 export async function DELETE(request: Request) {
   try {
@@ -207,7 +356,11 @@ export async function DELETE(request: Request) {
 
     if (productsInActiveOrders.length > 0) {
       const conflictProducts = [
-        ...new Set(productsInActiveOrders.map((item) => item.product.name)),
+        ...new Set(
+          productsInActiveOrders
+            .map((item) => item.product?.name)
+            .filter((name): name is string => Boolean(name))
+        ),
       ];
       return NextResponse.json(
         {

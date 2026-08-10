@@ -83,15 +83,15 @@ export default function CustomerFormModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-opacity-40 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300"
+      className="fixed inset-0 bg-opacity-40 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto animate-in fade-in duration-300"
       onClick={handleBackdropClick}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all duration-300 ease-out scale-100 animate-in zoom-in-95"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col transform transition-all duration-300 ease-out scale-100 animate-in zoom-in-95"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl shrink-0">
           <h2 className="text-xl font-bold text-gray-900 flex items-center">
             <svg
               className="w-6 h-6 mr-2 text-blue-600"
@@ -131,8 +131,11 @@ export default function CustomerFormModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col flex-1 min-h-0"
+        >
+          <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
             {/* Müşteri Adı */}
             <div>
               <label className="flex items-center text-sm font-semibold mb-2 text-gray-700">
@@ -343,66 +346,66 @@ export default function CustomerFormModal({
                 </label>
               </div>
             </div>
+          </div>
 
-            {/* Butonlar */}
-            <div className="flex gap-3 pt-6 border-t border-gray-200">
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                <span className="flex items-center justify-center">
-                  {loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      İşleniyor...
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-5 h-5 mr-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                      {editingCustomer ? "Güncelle" : "Kaydet"}
-                    </>
-                  )}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={loading}
-                className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="flex items-center justify-center">
-                  <svg
-                    className="w-5 h-5 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                  İptal
-                </span>
-              </button>
-            </div>
-          </form>
-        </div>
+          {/* Butonlar */}
+          <div className="flex gap-3 p-6 border-t border-gray-200 bg-white rounded-b-xl shrink-0">
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              <span className="flex items-center justify-center">
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    İşleniyor...
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    {editingCustomer ? "Güncelle" : "Kaydet"}
+                  </>
+                )}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="flex items-center justify-center">
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+                İptal
+              </span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>,
     document.body

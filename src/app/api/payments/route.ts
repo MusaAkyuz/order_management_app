@@ -9,34 +9,70 @@ const paymentSchema = z.object({
   amount: z.number().positive(),
 });
 
+// GET - Ödeme Listesi
+// Not: "page" veya "limit" parametresi gönderilmezse tüm eşleşen liste (eski
+// davranış, PaymentModal'ın sipariş bazlı sorguları için) döner. Bu
+// parametrelerden biri gönderilirse sayfalanmış { payments, pagination }
+// şeklinde yanıt döner.
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const orderId = searchParams.get("orderId");
     const customerId = searchParams.get("customerId");
-
-    console.log(
-      "Payment API GET - orderId:",
-      orderId,
-      "customerId:",
-      customerId
-    );
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const hasPagination = searchParams.has("page") || searchParams.has("limit");
 
     const where: any = {};
     if (orderId) where.orderId = parseInt(orderId);
     if (customerId) where.customerId = parseInt(customerId);
+    if (startDate || endDate) {
+      where.paymentDate = {};
+      if (startDate) where.paymentDate.gte = new Date(startDate);
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        where.paymentDate.lte = endOfDay;
+      }
+    }
 
-    console.log("Payment API - where condition:", where);
+    if (!hasPagination) {
+      const payments = await prisma.payment.findMany({
+        where,
+        orderBy: { paymentDate: "desc" },
+        include: { order: true, customer: true },
+      });
 
-    const payments = await prisma.payment.findMany({
-      where,
-      orderBy: { paymentDate: "desc" },
-      include: { order: true, customer: true },
+      return NextResponse.json({ success: true, data: payments });
+    }
+
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        orderBy: { paymentDate: "desc" },
+        include: { order: true, customer: true },
+        skip,
+        take: limit,
+      }),
+      prisma.payment.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        payments,
+        pagination: {
+          current: page,
+          total: Math.ceil(total / limit),
+          count: total,
+          limit,
+        },
+      },
     });
-
-    console.log("Payment API - found payments:", payments.length);
-
-    return NextResponse.json({ success: true, data: payments });
   } catch (error) {
     console.error("Payment GET error:", error);
     return NextResponse.json(

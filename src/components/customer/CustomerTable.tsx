@@ -8,6 +8,7 @@ interface Customer {
   address: string | null;
   taxNumber: string | null;
   isCompany: boolean;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }

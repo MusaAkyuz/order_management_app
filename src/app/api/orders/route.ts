@@ -47,6 +47,49 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = createOrderSchema.parse(body);
 
+    // Müşterinin var olduğunu doğrula
+    const customerExists = await prisma.customer.findUnique({
+      where: { id: validatedData.customerId },
+      select: { id: true },
+    });
+    if (!customerExists) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Seçili müşteri bulunamadı. Lütfen sayfayı yenileyip tekrar deneyin.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Manuel olmayan ürünlerin hâlâ var olduğunu doğrula
+    // (Sayfa açıkken ürün silinmiş/değişmiş olabilir, stok güncellemesi bu yüzden patlıyordu)
+    const referencedProductIds = [
+      ...new Set(
+        validatedData.orderItems
+          .filter((item) => !item.isManual && item.productId)
+          .map((item) => item.productId as number)
+      ),
+    ];
+    if (referencedProductIds.length > 0) {
+      const existingProducts = await prisma.product.findMany({
+        where: { id: { in: referencedProductIds } },
+        select: { id: true },
+      });
+      const existingIds = new Set(existingProducts.map((p) => p.id));
+      const missingIds = referencedProductIds.filter((id) => !existingIds.has(id));
+      if (missingIds.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Seçili ürünlerden bazıları artık mevcut değil. Lütfen sayfayı yenileyip tekrar deneyin.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Toplam fiyatı hesapla
     const itemsTotal = validatedData.orderItems.reduce(
       (sum, item) => sum + item.price * item.quantity,
@@ -162,6 +205,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10");
     const customerId = searchParams.get("customerId");
     const statusId = searchParams.get("statusId");
+    const search = searchParams.get("search");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
     const skip = (page - 1) * limit;
 
@@ -176,6 +222,40 @@ export async function GET(request: NextRequest) {
 
     if (statusId) {
       where.statusId = parseInt(statusId);
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        where.createdAt.lte = endOfDay;
+      }
+    }
+
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      const orConditions: any[] = [
+        { customer: { name: { contains: searchTerm } } },
+        {
+          orderItems: {
+            some: {
+              OR: [
+                { product: { name: { contains: searchTerm } } },
+                { manualName: { contains: searchTerm } },
+              ],
+            },
+          },
+        },
+      ];
+
+      const searchAsNumber = parseInt(searchTerm, 10);
+      if (!isNaN(searchAsNumber)) {
+        orConditions.push({ id: searchAsNumber });
+      }
+
+      where.OR = orConditions;
     }
 
     // Siparişleri getir

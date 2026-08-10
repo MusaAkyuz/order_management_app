@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import Layout from "../../components/Layout";
 import PaymentModal from "../../components/order/PaymentModal";
+import Pagination from "../../components/Pagination";
 import {
   getStatusBadgeClasses,
   getStatusStyling,
 } from "../../constants/orderStatus";
+import type { PaginationMeta } from "@/types/api";
 
 interface Order {
   id: number;
@@ -43,10 +45,24 @@ interface OrderStatus {
   description: string;
 }
 
+interface CustomerOption {
+  id: number;
+  name: string;
+}
+
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -56,73 +72,68 @@ export default function Orders() {
     null
   );
   const [availableStatuses, setAvailableStatuses] = useState<OrderStatus[]>([]);
+  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
   const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [orderToPayment, setOrderToPayment] = useState<Order | null>(null);
 
+  const hasActiveFilters = Boolean(
+    debouncedSearch.trim() || statusFilter || customerFilter || startDate || endDate
+  );
+
+  // Arama girdisini debounce et
   useEffect(() => {
-    async function fetchOrders() {
-      try {
-        const response = await fetch("/api/orders");
-        const data = await response.json();
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-        console.log("Orders API response:", data);
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(limit));
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (statusFilter) params.set("statusId", statusFilter);
+      if (customerFilter) params.set("customerId", customerFilter);
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
 
-        if (data.success && data.data && Array.isArray(data.data.orders)) {
-          setOrders(data.data.orders);
-          setFilteredOrders(data.data.orders); // Başlangıçta tüm siparişleri göster
-        } else {
-          console.error("Siparişler yüklenemedi:", data.error);
-          setOrders([]); // Boş array set et
-          setFilteredOrders([]);
+      const response = await fetch(`/api/orders?${params.toString()}`);
+      const data = await response.json();
+
+      if (data.success && data.data && Array.isArray(data.data.orders)) {
+        setOrders(data.data.orders);
+        setPagination(data.data.pagination);
+
+        // Filtre değişimi sonrası mevcut sayfa aralık dışında kaldıysa son sayfaya dön
+        if (
+          data.data.pagination &&
+          data.data.pagination.total > 0 &&
+          page > data.data.pagination.total
+        ) {
+          setPage(data.data.pagination.total);
         }
-      } catch (error) {
-        console.error("Siparişler getirilirken hata:", error);
-        setOrders([]); // Hata durumunda boş array set et
-        setFilteredOrders([]);
-      } finally {
-        setLoading(false);
+      } else {
+        console.error("Siparişler yüklenemedi:", data.error);
+        setOrders([]);
+        setPagination(null);
       }
+    } catch (error) {
+      console.error("Siparişler getirilirken hata:", error);
+      setOrders([]);
+      setPagination(null);
+    } finally {
+      setLoading(false);
     }
+  }, [page, limit, debouncedSearch, statusFilter, customerFilter, startDate, endDate]);
 
-    fetchOrders();
-  }, []);
-
-  // Arama fonksiyonu
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredOrders(orders);
-    } else {
-      const filtered = orders.filter((order) => {
-        const searchLower = searchTerm.toLowerCase();
-
-        // Sipariş numarasında ara
-        const orderNumber = order.id.toString();
-        if (orderNumber.includes(searchLower)) return true;
-
-        // Müşteri adında ara
-        if (order.customer?.name?.toLowerCase().includes(searchLower))
-          return true;
-
-        // Sipariş durumunda ara
-        if (order.status?.name?.toLowerCase().includes(searchLower))
-          return true;
-
-        // Ürün adlarında ara
-        const hasMatchingProduct = order.orderItems.some(
-          (item) =>
-            item.product &&
-            item.product.name &&
-            item.product.name.toLowerCase().includes(searchLower)
-        );
-        if (hasMatchingProduct) return true;
-
-        return false;
-      });
-
-      setFilteredOrders(filtered);
-    }
-  }, [searchTerm, orders]);
+    fetchOrders();
+  }, [fetchOrders]);
 
   // Sipariş statülerini yükle
   useEffect(() => {
@@ -141,6 +152,34 @@ export default function Orders() {
 
     fetchStatuses();
   }, []);
+
+  // Müşteri filtre listesini yükle (sayfalama parametresi göndermeden -> tam liste)
+  useEffect(() => {
+    async function fetchCustomerOptions() {
+      try {
+        const response = await fetch("/api/customers");
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.data)) {
+          setCustomerOptions(data.data);
+        }
+      } catch (error) {
+        console.error("Müşteri listesi yüklenirken hata:", error);
+      }
+    }
+
+    fetchCustomerOptions();
+  }, []);
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setDebouncedSearch("");
+    setStatusFilter("");
+    setCustomerFilter("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+  };
 
   // Sipariş silme modal açma fonksiyonu
   const openDeleteModal = (order: Order) => {
@@ -167,10 +206,8 @@ export default function Orders() {
           id: loadingToast,
         });
 
-        // Siparişi listeden kaldır
-        setOrders((prevOrders) =>
-          prevOrders.filter((order) => order.id !== orderToDelete.id)
-        );
+        // Listeyi güncel filtre/sayfa ile yeniden yükle
+        await fetchOrders();
       } else {
         toast.error(result.error || "Sipariş silinirken hata oluştu", {
           id: loadingToast,
@@ -253,25 +290,15 @@ export default function Orders() {
 
   // Ödeme başarılı callback
   const handlePaymentSuccess = async () => {
-    // Sipariş listesini yeniden yükle
-    try {
-      const response = await fetch("/api/orders");
-      const data = await response.json();
-
-      if (data.success && data.data && Array.isArray(data.data.orders)) {
-        setOrders(data.data.orders);
-        setFilteredOrders(data.data.orders);
-      }
-    } catch (error) {
-      console.error("Siparişler güncellenirken hata:", error);
-    }
+    // Sipariş listesini güncel filtre/sayfa ile yeniden yükle
+    await fetchOrders();
 
     // Modal'ı kapat
     setShowPaymentModal(false);
     setOrderToPayment(null);
   };
 
-  if (loading) {
+  if (loading && !pagination) {
     return (
       <Layout currentPage="orders">
         <div className="flex justify-center items-center h-64">
@@ -441,144 +468,234 @@ export default function Orders() {
 
       <Layout currentPage="orders">
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Siparişler</h1>
-            <p className="text-gray-600">
-              Tüm siparişleri görüntüleyin ve yönetin
-            </p>
+          <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Siparişler</h1>
+              <p className="text-gray-600">
+                Tüm siparişleri görüntüleyin ve yönetin
+              </p>
+            </div>
+            <a
+              href="/create-order"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+            >
+              Yeni Sipariş
+            </a>
           </div>
 
-          {!Array.isArray(orders) || orders.length === 0 ? (
-            <div className="text-center py-12 bg-white shadow-lg rounded-lg">
-              <div className="text-gray-400 mb-4">
-                <svg
-                  className="mx-auto h-12 w-12"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          {/* Filtreler */}
+          <div className="mb-6 p-4 bg-white shadow-sm rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ara
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg
+                      className="h-4 w-4 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Sipariş no, müşteri veya ürün ara..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="block w-full pl-9 pr-8 py-2 border border-gray-300 rounded-md text-sm leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   />
-                </svg>
+                  {searchInput && (
+                    <button
+                      onClick={() => setSearchInput("")}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    >
+                      <svg
+                        className="h-4 w-4 text-gray-400 hover:text-gray-600"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Henüz sipariş bulunmuyor
-              </h3>
-              <p className="text-gray-500 mb-4">
-                İlk siparişinizi oluşturmak için sipariş oluştur sayfasına
-                gidin.
-              </p>
-              <a
-                href="/create-order"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-              >
-                Sipariş Oluştur
-              </a>
-            </div>
-          ) : filteredOrders.length === 0 && searchTerm ? (
-            <div className="text-center py-12 bg-white shadow-lg rounded-lg">
-              <div className="text-gray-400 mb-4">
-                <svg
-                  className="mx-auto h-12 w-12"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Durum
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
+                  <option value="">Tüm durumlar</option>
+                  {availableStatuses.map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Arama sonucu bulunamadı
-              </h3>
-              <p className="text-gray-500 mb-4">
-                "<strong>{searchTerm}</strong>" araması için sonuç bulunamadı.
-              </p>
-              <button
-                onClick={() => setSearchTerm("")}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
-              >
-                Aramayı Temizle
-              </button>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Müşteri
+                </label>
+                <select
+                  value={customerFilter}
+                  onChange={(e) => {
+                    setCustomerFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Tüm müşteriler</option>
+                  {customerOptions.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Başlangıç
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Bitiş
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
             </div>
+
+            {hasActiveFilters && (
+              <div className="mt-3">
+                <button
+                  onClick={clearFilters}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Filtreleri temizle
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!pagination || pagination.count === 0 ? (
+            hasActiveFilters ? (
+              <div className="text-center py-12 bg-white shadow-lg rounded-lg">
+                <div className="text-gray-400 mb-4">
+                  <svg
+                    className="mx-auto h-12 w-12"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Arama sonucu bulunamadı
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Filtrelere uygun sipariş bulunamadı.
+                </p>
+                <button
+                  onClick={clearFilters}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200"
+                >
+                  Filtreleri Temizle
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-white shadow-lg rounded-lg">
+                <div className="text-gray-400 mb-4">
+                  <svg
+                    className="mx-auto h-12 w-12"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Henüz sipariş bulunmuyor
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  İlk siparişinizi oluşturmak için sipariş oluştur sayfasına
+                  gidin.
+                </p>
+                <a
+                  href="/create-order"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  Sipariş Oluştur
+                </a>
+              </div>
+            )
           ) : (
             <div className="bg-white shadow-lg rounded-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                  <h2 className="text-lg font-medium text-gray-900">
-                    {searchTerm
-                      ? `${filteredOrders.length} sipariş bulundu`
-                      : `Toplam ${orders.length} sipariş`}
-                    {searchTerm && (
-                      <span className="text-sm font-normal text-gray-500 ml-2">
-                        "{searchTerm}" için
-                      </span>
-                    )}
-                  </h2>
-
-                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                    {/* Arama Çubuğu */}
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                          />
-                        </svg>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Ara..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="block w-64 pl-9 pr-8 py-2 border border-gray-300 rounded-md text-sm leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      {searchTerm && (
-                        <button
-                          onClick={() => setSearchTerm("")}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                        >
-                          <svg
-                            className="h-4 w-4 text-gray-400 hover:text-gray-600"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
-                            />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-
-                    <a
-                      href="/create-order"
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
-                    >
-                      Yeni Sipariş
-                    </a>
-                  </div>
-                </div>
+                <h2 className="text-lg font-medium text-gray-900">
+                  Toplam {pagination.count} sipariş
+                  {loading && (
+                    <span className="text-sm font-normal text-gray-400 ml-2">
+                      güncelleniyor...
+                    </span>
+                  )}
+                </h2>
               </div>
 
               <table className="min-w-full divide-y divide-gray-200">
@@ -608,7 +725,7 @@ export default function Orders() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredOrders.map((order) => (
+                  {orders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         #{order.id}
@@ -684,6 +801,15 @@ export default function Orders() {
                   ))}
                 </tbody>
               </table>
+
+              <Pagination
+                pagination={pagination}
+                onPageChange={setPage}
+                onLimitChange={(newLimit) => {
+                  setLimit(newLimit);
+                  setPage(1);
+                }}
+              />
             </div>
           )}
         </div>

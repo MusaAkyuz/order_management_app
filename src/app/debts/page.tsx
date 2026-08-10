@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Layout from "../../components/Layout";
+import Pagination from "../../components/Pagination";
 import { formatCurrency } from "../../utils/currency";
+import type { PaginationMeta } from "@/types/api";
 
 interface CustomerDebt {
   id: number;
@@ -26,29 +28,39 @@ interface DebtStats {
 
 export default function DebtsPage() {
   const [customers, setCustomers] = useState<CustomerDebt[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<CustomerDebt[]>(
-    []
-  );
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [stats, setStats] = useState<DebtStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showOnlyWithDebt, setShowOnlyWithDebt] = useState(true);
 
+  // Arama girdisini debounce et
   useEffect(() => {
-    fetchDebts();
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  useEffect(() => {
-    filterCustomers();
-  }, [customers, searchTerm, showOnlyWithDebt]);
-
-  const fetchDebts = async () => {
+  const fetchDebts = useCallback(async () => {
     try {
-      const response = await fetch("/api/debts");
+      setLoading(true);
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(limit));
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (showOnlyWithDebt) params.set("onlyWithDebt", "true");
+
+      const response = await fetch(`/api/debts?${params.toString()}`);
       const data = await response.json();
 
       if (data.success) {
         setCustomers(data.data.customers);
+        setPagination(data.data.pagination);
         setStats(data.data.stats);
       } else {
         console.error("Borç verileri yüklenemedi:", data.error);
@@ -58,31 +70,13 @@ export default function DebtsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, limit, debouncedSearch, showOnlyWithDebt]);
 
-  const filterCustomers = () => {
-    let filtered = customers;
+  useEffect(() => {
+    fetchDebts();
+  }, [fetchDebts]);
 
-    // Sadece borcu olanları göster filtresi
-    if (showOnlyWithDebt) {
-      filtered = filtered.filter((customer) => customer.remainingDebt > 0);
-    }
-
-    // Arama filtresi
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (customer) =>
-          customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (customer.email &&
-            customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (customer.phone && customer.phone.includes(searchTerm))
-      );
-    }
-
-    setFilteredCustomers(filtered);
-  };
-
-  if (loading) {
+  if (loading && !pagination) {
     return (
       <Layout currentPage="debts">
         <div className="flex justify-center items-center h-64">
@@ -151,8 +145,8 @@ export default function DebtsPage() {
             <input
               type="text"
               placeholder="Müşteri adı, email veya telefon ile ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -161,7 +155,10 @@ export default function DebtsPage() {
               <input
                 type="checkbox"
                 checked={showOnlyWithDebt}
-                onChange={(e) => setShowOnlyWithDebt(e.target.checked)}
+                onChange={(e) => {
+                  setShowOnlyWithDebt(e.target.checked);
+                  setPage(1);
+                }}
                 className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <span className="text-sm text-gray-700">
@@ -198,8 +195,8 @@ export default function DebtsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredCustomers.length > 0 ? (
-                  filteredCustomers.map((customer) => (
+                {customers.length > 0 ? (
+                  customers.map((customer) => (
                     <tr key={customer.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -258,6 +255,17 @@ export default function DebtsPage() {
               </tbody>
             </table>
           </div>
+
+          {pagination && (
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              onLimitChange={(newLimit) => {
+                setLimit(newLimit);
+                setPage(1);
+              }}
+            />
+          )}
         </div>
       </div>
     </Layout>

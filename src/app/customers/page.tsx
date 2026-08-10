@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import Layout from "../../components/Layout";
 import PageHeader from "@/components/customer/PageHeader";
 import CustomerTable from "@/components/customer/CustomerTable";
 import CustomerFormModal from "@/components/customer/CustomerFormModal";
 import LoadingSpinner from "@/components/customer/LoadingSpinner";
+import Pagination from "@/components/Pagination";
+import type { PaginationMeta } from "@/types/api";
 
 interface Customer {
   id: number;
@@ -16,39 +18,45 @@ interface Customer {
   address: string | null;
   taxNumber: string | null;
   isCompany: boolean;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Filtrelenmiş müşteriler
-  const filteredCustomers = customers.filter((customer) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      customer.name.toLowerCase().includes(searchLower) ||
-      (customer.email && customer.email.toLowerCase().includes(searchLower)) ||
-      (customer.phone && customer.phone.toLowerCase().includes(searchLower)) ||
-      (customer.address &&
-        customer.address.toLowerCase().includes(searchLower)) ||
-      (customer.taxNumber &&
-        customer.taxNumber.toLowerCase().includes(searchLower)) ||
-      (customer.isCompany ? "kurumsal" : "bireysel").includes(searchLower)
-    );
-  });
+  // Arama girdisini debounce et
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // Müşteri listesini yükle
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     try {
-      const response = await fetch("/api/customers");
+      setLoading(true);
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(limit));
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+
+      const response = await fetch(`/api/customers?${params.toString()}`);
       const result = await response.json();
-      if (result.success) {
-        setCustomers(result.data);
+      if (result.success && result.data) {
+        setCustomers(result.data.customers ?? []);
+        setPagination(result.data.pagination ?? null);
       } else {
         toast.error("Müşteriler yüklenirken hata oluştu");
       }
@@ -58,11 +66,11 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, limit, debouncedSearch]);
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [fetchCustomers]);
 
   // Modal açma/kapama
   const handleOpenModal = () => {
@@ -110,7 +118,7 @@ export default function CustomersPage() {
     handleCloseModal();
   };
 
-  if (loading) {
+  if (loading && !pagination) {
     return (
       <Layout currentPage="customers">
         <div className="max-w-6xl mx-auto p-6">
@@ -128,8 +136,8 @@ export default function CustomersPage() {
           description="Müşterilerinizi ekleyin, düzenleyin ve yönetin"
           onAddNew={handleOpenModal}
           addButtonText="Yeni Müşteri Ekle"
-          searchValue={searchTerm}
-          onSearchChange={setSearchTerm}
+          searchValue={searchInput}
+          onSearchChange={setSearchInput}
           searchPlaceholder="Müşteri ara (isim, email, telefon, adres, vergi no...)"
           icon={
             <svg
@@ -149,7 +157,7 @@ export default function CustomersPage() {
         />
 
         {/* Arama Sonuçları Bilgisi */}
-        {searchTerm && (
+        {debouncedSearch && pagination && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center text-sm text-blue-700">
               <svg
@@ -166,16 +174,11 @@ export default function CustomersPage() {
                 />
               </svg>
               <span>
-                "{searchTerm}" araması için{" "}
-                <strong>{filteredCustomers.length}</strong> sonuç bulundu
-                {customers.length > 0 && (
-                  <span className="ml-1">
-                    (Toplam {customers.length} müşteri arasından)
-                  </span>
-                )}
+                "{debouncedSearch}" araması için{" "}
+                <strong>{pagination.count}</strong> sonuç bulundu
               </span>
               <button
-                onClick={() => setSearchTerm("")}
+                onClick={() => setSearchInput("")}
                 className="ml-auto text-blue-600 hover:text-blue-800 underline"
               >
                 Aramayı temizle
@@ -185,12 +188,25 @@ export default function CustomersPage() {
         )}
 
         <CustomerTable
-          customers={filteredCustomers}
+          customers={customers}
           onEdit={handleEdit}
           onDelete={handleDelete}
-          searchTerm={searchTerm}
-          totalCustomers={customers.length}
+          searchTerm={debouncedSearch}
+          totalCustomers={pagination?.count}
         />
+
+        {pagination && (
+          <div className="bg-white shadow-lg rounded-xl border border-gray-200 mt-4">
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              onLimitChange={(newLimit) => {
+                setLimit(newLimit);
+                setPage(1);
+              }}
+            />
+          </div>
+        )}
 
         {isModalOpen && (
           <CustomerFormModal

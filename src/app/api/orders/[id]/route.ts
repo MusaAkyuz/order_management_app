@@ -52,10 +52,11 @@ const updateOrderSchema = z.object({
 // GET - Tekil Sipariş
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const orderId = parseInt(params.id);
+    const { id } = await params;
+    const orderId = parseInt(id);
 
     const order = await prisma.order.findUnique({
       where: {
@@ -107,10 +108,11 @@ export async function GET(
 // PUT - Sipariş Güncelleme
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const orderId = parseInt(params.id);
+    const { id } = await params;
+    const orderId = parseInt(id);
     const body = await request.json();
 
     // Sadece statusId varsa status güncellemesi yap
@@ -181,6 +183,48 @@ export async function PUT(
 
     // Tam sipariş güncellemesi
     const validatedData = updateOrderSchema.parse(body);
+
+    // Müşterinin var olduğunu doğrula
+    const customerExists = await prisma.customer.findUnique({
+      where: { id: validatedData.customerId },
+      select: { id: true },
+    });
+    if (!customerExists) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Seçili müşteri bulunamadı. Lütfen sayfayı yenileyip tekrar deneyin.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Manuel olmayan ürünlerin hâlâ var olduğunu doğrula
+    const referencedProductIds = [
+      ...new Set(
+        validatedData.orderItems
+          .filter((item) => !item.isManual && item.productId)
+          .map((item) => item.productId)
+      ),
+    ];
+    if (referencedProductIds.length > 0) {
+      const existingProducts = await prisma.product.findMany({
+        where: { id: { in: referencedProductIds } },
+        select: { id: true },
+      });
+      const existingIds = new Set(existingProducts.map((p) => p.id));
+      const missingIds = referencedProductIds.filter((id) => !existingIds.has(id));
+      if (missingIds.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Seçili ürünlerden bazıları artık mevcut değil. Lütfen sayfayı yenileyip tekrar deneyin.",
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const order = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
@@ -356,10 +400,11 @@ export async function PUT(
 // DELETE - Sipariş Silme (Soft Delete)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const orderId = parseInt(params.id);
+    const { id } = await params;
+    const orderId = parseInt(id);
 
     const order = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {

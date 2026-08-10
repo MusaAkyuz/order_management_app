@@ -1,5 +1,6 @@
 interface ProductPageHeaderProps {
   onAddProduct: () => void;
+  onBulkPriceUpdate: () => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   totalProducts: number;
@@ -9,6 +10,7 @@ interface ProductPageHeaderProps {
 
 export default function ProductPageHeader({
   onAddProduct,
+  onBulkPriceUpdate,
   searchTerm,
   onSearchChange,
   totalProducts,
@@ -69,6 +71,27 @@ export default function ProductPageHeader({
               className="pl-10 pr-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64 placeholder-gray-600"
             />
           </div>
+
+          {/* Toplu Fiyat Güncelleme Butonu */}
+          <button
+            onClick={onBulkPriceUpdate}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 7h6m0 10v-3m-3 3v-6m-3 6v-9m12-4v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2z"
+              />
+            </svg>
+            Toplu Fiyat Güncelle
+          </button>
 
           {/* Yeni Ürün Ekle Butonu */}
           <button
